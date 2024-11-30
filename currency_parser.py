@@ -1,3 +1,8 @@
+# flake8: noqa
+# pylint: disable=broad-exception-raised, raise-missing-from, too-many-arguments, redefined-outer-name
+# pylance: disable=reportMissingImports, reportMissingModuleSource, reportGeneralTypeIssues
+# type: ignore
+
 import re
 from typing import List, Tuple
 
@@ -121,5 +126,4 @@ class CurrencyParser:
         return result
 
     def process_currencies(self, text: str) -> List[Tuple[float, str, str]]:
-        """Implementation of abstract method"""
         return self.find_currencies(text)

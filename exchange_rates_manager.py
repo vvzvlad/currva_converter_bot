@@ -1,3 +1,8 @@
+# flake8: noqa
+# pylint: disable=broad-exception-raised, raise-missing-from, too-many-arguments, redefined-outer-name
+# pylance: disable=reportMissingImports, reportMissingModuleSource, reportGeneralTypeIssues
+# type: ignore
+
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import json

@@ -1,33 +1,26 @@
-import re
-import requests
-from typing import Dict, List, Tuple, Optional
-from datetime import datetime, timedelta
-import os
-import time
-import threading
-import random
-import json
-import logging
-import signal
-import os
-import sys
-from pathlib import Path
-import glob
-from abc import ABC, abstractmethod
-from decimal import Decimal
+# flake8: noqa
+# pylint: disable=broad-exception-raised, raise-missing-from, too-many-arguments, redefined-outer-name
+# pylance: disable=reportMissingImports, reportMissingModuleSource, reportGeneralTypeIssues
+# type: ignore
 
-import requests.exceptions
-from urllib3.exceptions import NewConnectionError
+#TODO а приникь на "нахуй пошел" он будет игнорить чат какое-то время
+#TODO Ещё интересный момент: как детектить валюту какой страны имел в виду автор? Я например сейчас под песо подразумеваю филиппинские, а кто-то может в Мексике быть
+
+
+import logging
+import os
+import signal
+import sys
+import time
 
 import telebot
 from telebot import types
-from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from json.decoder import JSONDecodeError
+from watchdog.observers import Observer
 
-from exchange_rates_manager import ExchangeRatesManager
-from currency_parser import CurrencyParser
 from currency_formatter import CurrencyFormatter
+from currency_parser import CurrencyParser
+from exchange_rates_manager import ExchangeRatesManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,19 +51,13 @@ bot.set_my_commands([
     types.BotCommand("help", "Показать помощь")
 ])
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "Я конвертирую валюты. Просто напиши сумму и валюту, например: 100 долларов, £5, 1000₽\n"
-                        "Также можешь использовать инлайн-режим, набрав @currvaconverter_bot и сумму с валютой")
-
-@bot.message_handler(commands=['help'])
-def send_help(message):
-    bot.reply_to(message, "Примеры использования:\n"
-                        "• 100 долларов\n"
-                        "• £50\n"
-                        "• 1000₽\n"
-                        "• 10 шекелей\n"
-                        "Поддерживаемые валюты: " + ", ".join(currency_formatter.display_currencies))
+    bot.reply_to(message, "Бот конвертирует валюты. Он написан специально для чатов, в которых много людей из разных стран, которые постоянно говорят 'а я купил за 100 фунтов телевизор'. "
+                        "А ты читаешь это и думаешь, 'епт, а сколько это в лари-то??' Теперь вот этого бота можно добавить в любой чат, он будет искать сообщения, "
+                        "в которых есть паттерн '(сумма) (валюта)', например '100 шекелей' и реплаить на них сообщением"
+                        "с конвертацией этой суммы в другие валюты: '100 шекелей (🇮🇱) это 🇺🇸 $28, 🇪🇺 €26, 🇬🇧 £22, 🇷🇺 2932 ₽, 🇯🇵 4124 ¥, 🇦🇲 10 868 ֏' \n"
+                        "Тоже самое можно просто писать ему в личку (он ответит там) или написать '@currvaconverter_bot 100 шекелей' в любом чате(в диалогах тоже), чтобы использовать инлайн режим\n")
 
 @bot.inline_handler(lambda query: len(query.query) > 0)
 def handle_inline_query(query):
@@ -87,19 +74,37 @@ def handle_inline_query(query):
                     if rate:
                         rates[f"{curr}_{target}"] = rate
 
-        response = currency_formatter.format_multiple_conversions(found_currencies, rates)
+        # Original response with just conversions
+        response = currency_formatter.format_multiple_conversions(found_currencies, rates, mode='chat')
         if not response:
             return
 
-        r = types.InlineQueryResultArticle(
-            id='1',
-            title=f'Конвертировать',
-            description=response,
-            input_message_content=types.InputTextMessageContent(
-                message_text=response
+        # Create modified message with replacements
+        modified_text_inline = query.query
+        for amount, curr, original in reversed(found_currencies):
+            conversion = currency_formatter.format_conversion((amount, curr, original), rates, mode='inline')
+            modified_text_inline = modified_text_inline.replace(original, conversion)
+
+
+        results = [
+            types.InlineQueryResultArticle(
+                id='1',
+                title='Конвертировай',
+                description=response,
+                input_message_content=types.InputTextMessageContent(
+                    message_text=response
+                )
+            ),
+            types.InlineQueryResultArticle(
+                id='2', 
+                title='Дополняй',
+                description=modified_text_inline,
+                input_message_content=types.InputTextMessageContent(
+                    message_text=modified_text_inline
+                )
             )
-        )
-        bot.answer_inline_query(query.id, [r])
+        ]
+        bot.answer_inline_query(query.id, results)
 
     except Exception as e:
         logger.error(f"Error processing inline query '{query.query}': {str(e)}")
