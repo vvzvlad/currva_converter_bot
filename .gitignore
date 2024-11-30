@@ -5,3 +5,4 @@ __pycache__/
 .venv
 data/
 exchange_rates_cache.json
+.vscode/
