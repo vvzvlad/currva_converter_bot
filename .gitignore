@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+data/
+exchange_rates_cache.json
