@@ -106,9 +106,7 @@ def handle_inline_query(query):
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    # Игнорируем форварды и инлайн сообщения
-    if message.forward_from or message.via_bot:
-        return
+    if message.forward_from or message.via_bot: return
         
     try:
         found_currencies = currency_parser.find_currencies(message.text)
@@ -135,10 +133,9 @@ class CodeChangeHandler(FileSystemEventHandler):
         
     def on_modified(self, event):
         # Check if the modified file is either the bot code or a question file
-        is_bot_code = event.src_path.endswith('bot.py')
-        is_question_file = event.src_path.endswith('.json') and 'questions' in event.src_path
+        is_bot_code = event.src_path.endswith('.py')
         
-        if is_bot_code or is_question_file:
+        if is_bot_code:
             current_time = time.time()
             if current_time - self.last_modified > 1:  # Prevent multiple reloads
                 self.last_modified = current_time
@@ -166,7 +163,6 @@ if __name__ == '__main__':
     event_handler = CodeChangeHandler()
     observer = Observer()
     observer.schedule(event_handler, path='.', recursive=False)
-    observer.schedule(event_handler, path='questions', recursive=False)
     observer.start()
     
     try:

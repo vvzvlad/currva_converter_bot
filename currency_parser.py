@@ -6,7 +6,6 @@ class CurrencyParser:
         self.number = r'(?P<amount>(?:\d{1,3}(?:[., ]\d{3})*|\d+)(?:[.,]\d+)?(?:к)?)'
         
         self.patterns = [
-            
             ('ILS', fr'{self.number}\s*(?:шекел(?:ей|я|ь)|шек|шах|ils|ILS|₪)\b'),
             ('ILS', fr'{self.number}\s*₪'),
 
