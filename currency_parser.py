@@ -36,7 +36,7 @@ class CurrencyParser:
             ('AMD', fr'{self.number}\s*(?:драм(?:ов|а|))\b'),
             ('CNY', fr'{self.number}\s*(?:юан(?:ей|я|ь)|cny|CNY)\b'),
             ('GEL', fr'{self.number}\s*(?:лари|gel|GEL)\b'),
-            ('JOD', fr'{self.number}\s*(?:динар(?:ов|а|)|jod|JOD)\b'),
+            ('RSD', fr'{self.number}\s*(?:динар(?:ов|а|)|rsd|RSD)\b'),
             ('THB', fr'{self.number}\s*(?:бат(?:ов|а|)|thb|THB)\b'),
             ('KZT', fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
 
