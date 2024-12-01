@@ -3,7 +3,7 @@
 # pylance: disable=reportMissingImports, reportMissingModuleSource, reportGeneralTypeIssues
 # type: ignore
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from decimal import Decimal, ROUND_HALF_UP
 import logging
 
@@ -30,7 +30,7 @@ class CurrencyFormatter:
         }
         self.target_currencies = list(self.currency_formats.keys())
         # Currencies to display in the message
-        self.display_currencies = ['RUB', 'USD', 'ILS', 'EUR', 'GBP', "JPY", "AMD"]
+        self.default_currencies = ['RUB', 'USD', 'ILS', 'EUR', 'GBP', "JPY", "AMD"]
         self.symbol_before_number = ['USD', 'EUR', 'GBP', 'CAD']
 
     def _format_amount(self, amount: Decimal, currency: str) -> str:
@@ -54,7 +54,7 @@ class CurrencyFormatter:
         else:
             return f"{flag} {formatted} {symbol}"
 
-    def format_conversion(self, currency_data: Tuple[float, str, str], rates: Dict[str, float], mode: str) -> str:
+    def format_conversion(self, currency_data: Tuple[float, str, str], rates: Dict[str, float], mode: str, user_currencies: Optional[List[str]] = None) -> str:
         """Format currency conversion result into message"""
         amount, currency, original = currency_data
         
@@ -62,6 +62,10 @@ class CurrencyFormatter:
             if amount == 0: return "Нахуй пошел"            
             if amount == 0.5 and currency == 'USD': return "In Da Club!"
     
+        # Check if user has only the source currency in settings
+        target_currencies = user_currencies if user_currencies else self.default_currencies
+        if len(target_currencies) == 1 and target_currencies[0] == currency:
+            return f"{original} (🇷🇺): других валют для конвертации не установлено. Используйте /currencies"
         
         if mode == 'chat':
             usd_amount = amount # if currency is USD 
@@ -91,10 +95,8 @@ class CurrencyFormatter:
             else:
                 raise ValueError(f"Unknown mode: {mode}")
         
-        
-        # Convert to display currencies only
         conversions = []
-        for target_curr in self.display_currencies:
+        for target_curr in target_currencies:
             if target_curr == currency:
                 continue
                 
@@ -106,7 +108,7 @@ class CurrencyFormatter:
                 converted_amount = Decimal(str(amount)) * Decimal(str(rate))
                 conversions.append(self._format_amount(converted_amount, target_curr))
             except Exception as e:
-                logger.error(f"Error formatting currency {target_curr}: {e}")
+                logger.error(f"Error converting {amount} {currency} to {target_curr}: {str(e)}")
                 continue
                 
         if conversions:
@@ -119,14 +121,14 @@ class CurrencyFormatter:
             
         return message
     
-    def format_multiple_conversions(self, currency_list: List[Tuple[float, str, str]], rates: Dict[str, float], mode: str = 'chat') -> str:
+    def format_multiple_conversions(self, currency_list: List[Tuple[float, str, str]], rates: Dict[str, float], mode: str = 'chat', user_currencies: Optional[List[str]] = None) -> str:
         """Format multiple currency conversions"""
         if not currency_list:
             return None 
             
         conversions = []
         for amount, curr, original in currency_list:
-            conversion = self.format_conversion((amount, curr, original), rates, mode=mode)
+            conversion = self.format_conversion((amount, curr, original), rates, mode=mode, user_currencies=user_currencies)
             if conversion:
                 conversions.append(conversion)
                 

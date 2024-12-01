@@ -23,6 +23,7 @@ from currency_formatter import CurrencyFormatter
 from currency_parser import CurrencyParser
 from exchange_rates_manager import ExchangeRatesManager
 from statistics_manager import StatisticsManager
+from user_settings_manager import UserSettingsManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,11 +57,13 @@ rates_manager = ExchangeRatesManager()
 currency_parser = CurrencyParser()
 currency_formatter = CurrencyFormatter()
 statistics_manager = StatisticsManager()
+user_settings_manager = UserSettingsManager()
 
 bot.set_my_commands([
     types.BotCommand("start", "Запустить бота"),
     types.BotCommand("help", "Показать помощь"),
-    types.BotCommand("stats", "Показать статистику (только для админа)")
+    types.BotCommand("stats", "Показать статистику (только для админа)"),
+    types.BotCommand("currencies", "Настроить отображаемые валюты")
 ])
 
 @bot.message_handler(commands=['start', 'help'])
@@ -71,6 +74,62 @@ def send_welcome(message):
                         "с конвертацией этой суммы в другие валюты: '100 шекелей (🇮🇱) это 🇺🇸 $28, 🇪🇺 €26, 🇬🇧 £22, 🇷🇺 2932 ₽, 🇯🇵 4124 ¥, 🇦🇲 10 868 ֏' \n\n"
                         "Тоже самое можно просто писать ему в личку (он ответит там) или написать '@currvaconverter_bot 100 шекелей' в любом чате(в диалогах тоже), чтобы использовать инлайн режим\n")
 
+
+@bot.message_handler(commands=['currencies'])
+def handle_currencies(message):
+    """Handle /currencies command"""
+    args = [arg.strip(',') for arg in message.text.split()[1:]]  # Get arguments after command and remove commas
+    
+    is_chat = message.chat.type in ['group', 'supergroup']
+    entity_id = message.chat.id if is_chat else message.from_user.id
+    
+    if not args:
+        # Show current settings and help
+        current_currencies = user_settings_manager.get_currencies(entity_id, is_chat)
+        available_currencies = currency_formatter.target_currencies
+        
+        if is_chat:
+            response =  f"Укажите набор валют через пробел для чата '{message.chat.title}'. Пример:\n"
+        else:
+            response = f"Укажите набор валют через пробел для пользователя {message.from_user.username}. Пример:\n"
+        response += f"/currencies {' '.join(available_currencies)} (это все доступные валюты)\n"
+        
+        if current_currencies:
+            response += f"\nТекущие {'валюты чата' if is_chat else 'ваши валюты'}: {', '.join(current_currencies)}"
+        else:
+            response += f"\nСейчас используются валюты по умолчанию: {', '.join(currency_formatter.default_currencies)}"
+            
+        bot.reply_to(message, response)
+        return
+
+    # Check if user is admin
+    if is_chat:
+        user_member = bot.get_chat_member(message.chat.id, message.from_user.id)
+        if user_member.status not in ['creator', 'administrator']:
+            bot.reply_to(message, "Только администраторы чата могут менять настройки валют")
+            return
+
+    # Convert to uppercase and filter valid currencies
+    new_currencies = [curr.upper() for curr in args]
+    valid_currencies = [curr for curr in new_currencies if curr in currency_formatter.target_currencies]
+    
+    if not valid_currencies:
+        bot.reply_to(message, "Ошибка: не указано ни одной правильной валюты")
+        return
+        
+    # Save new settings
+    user_settings_manager.set_currencies(entity_id, valid_currencies, is_chat)
+    
+    invalid_currencies = set(new_currencies) - set(valid_currencies)
+    response = ""
+    if invalid_currencies:
+        response += f"\nНеправильные коды валют: {', '.join(invalid_currencies)}"
+    if is_chat:
+        response += f"\nУстановлены валюты чата: {', '.join(valid_currencies)}"
+    else:
+        response += f"\nУстановлены валюты для конвертации: {', '.join(valid_currencies)}"
+
+    bot.reply_to(message, response)
 
 @bot.message_handler(commands=['stats'])
 def send_statistics(message):
@@ -102,7 +161,6 @@ def send_statistics(message):
 @bot.inline_handler(lambda query: len(query.query) > 0)
 def handle_inline_query(query):
     try:
-        
         found_currencies = currency_parser.find_currencies(query.query)
         if not found_currencies:
             results = [
@@ -128,25 +186,38 @@ def handle_inline_query(query):
             bot.answer_inline_query(query.id, results)
             return
 
+        # Get user settings for the user who sent the inline query
+        user_currencies = user_settings_manager.get_currencies(query.from_user.id, is_chat=False)
+
         rates = {}
         for amount, curr, _ in found_currencies:
-            for target in currency_formatter.target_currencies:
+            target_currencies = user_currencies if user_currencies else currency_formatter.target_currencies
+            for target in target_currencies:
                 if target != curr:
                     rate = rates_manager.get_rate(curr, target)
                     if rate:
                         rates[f"{curr}_{target}"] = rate
 
         # Original response with just conversions
-        converted_text = currency_formatter.format_multiple_conversions(found_currencies, rates, mode='chat')
+        converted_text = currency_formatter.format_multiple_conversions(
+            found_currencies, 
+            rates, 
+            mode='chat',
+            user_currencies=user_currencies
+        )
         if not converted_text:
             return
 
         # Create modified message with replacements
         modified_text_inline = query.query
         for amount, curr, original in reversed(found_currencies):
-            conversion = currency_formatter.format_conversion((amount, curr, original), rates, mode='inline')
+            conversion = currency_formatter.format_conversion(
+                (amount, curr, original), 
+                rates, 
+                mode='inline',
+                user_currencies=user_currencies
+            )
             modified_text_inline = modified_text_inline.replace(original, conversion)
-
 
         results = [
             types.InlineQueryResultArticle(
@@ -177,28 +248,39 @@ def handle_inline_query(query):
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    if message.forward_from or message.via_bot: return
+    if message.forward_from or message.via_bot: 
+        return
         
     try:
         found_currencies = currency_parser.find_currencies(message.text)
         if not found_currencies:
             return  
+
+        is_chat = message.chat.type in ['group', 'supergroup']
+        entity_id = message.chat.id if is_chat else message.from_user.id
+        user_currencies = user_settings_manager.get_currencies(entity_id, is_chat)
+        
         rates = {}
         for _amount, curr, _ in found_currencies:
-            for target in currency_formatter.target_currencies:
+            target_currencies = user_currencies if user_currencies else currency_formatter.target_currencies
+            for target in target_currencies:
                 if target != curr:
                     rate = rates_manager.get_rate(curr, target)
                     if rate:
                         rates[f"{curr}_{target}"] = rate
         
-        response = currency_formatter.format_multiple_conversions(found_currencies, rates)
+        response = currency_formatter.format_multiple_conversions(
+            found_currencies, 
+            rates, 
+            mode='chat',
+            user_currencies=user_currencies
+        )
         if response: 
             bot.reply_to(message, response)
             statistics_manager.log_request(user=message.from_user, chat_id=message.chat.id, chat_title=message.chat.title)
 
     except Exception as e:
         logger.error(f"Error processing message '{message.text}': {str(e)}")
-        #bot.reply_to(message, "Произошла ошибка при обработке вашего запроса")
 
 
 class CodeChangeHandler(FileSystemEventHandler):
@@ -227,6 +309,7 @@ def signal_handler(_signum, _frame):
         OBSERVER.stop()
         OBSERVER.join()
     sys.exit(0)
+
 
 if __name__ == '__main__':
     logger.info(f"Bot name: @{bot.get_me().username}")
