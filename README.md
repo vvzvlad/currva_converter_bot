@@ -52,7 +52,8 @@ The bot can optionally report metrics to InfluxDB. Set `INFLUX_VERSION` to enabl
 Common settings:
 
 - `INFLUX_URL` - InfluxDB server URL
-- `INFLUX_REPORTING_PERIOD` - Reporting period in seconds (default: 300, minimum: 10)
+- `INFLUX_REPORTING_PERIOD` - Reporting period in seconds (default: 3600, minimum: 100)
+- `INFLUX_TOPIC` - Topic for metrics (e.g. bots/currva_converter_bot)
 
 ### InfluxDB v2.x Configuration
 
