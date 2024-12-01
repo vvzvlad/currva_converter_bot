@@ -6,7 +6,7 @@
 #TODO а приникь на "нахуй пошел" он будет игнорить чат какое-то время
 #TODO Ещё интересный момент: как детектить валюту какой страны имел в виду автор? Я например сейчас под песо подразумеваю филиппинские, а кто-то может в Мексике быть
 #TODO дать возможность добавлять произвольные валюты
-
+#TODO https://github.com/FlongyDev/py-rpn калькулятор
 
 import logging
 import os
@@ -229,7 +229,8 @@ def signal_handler(_signum, _frame):
     sys.exit(0)
 
 if __name__ == '__main__':
-    logger.info(f"\n\n\nStarting currency converter bot @{bot.get_me().username}...")
+    logger.info(f"Bot name: @{bot.get_me().username}")
+    logger.info(f"Starting currency converter bot...\n\n\n")
     signal.signal(signal.SIGINT, signal_handler)
     event_handler = CodeChangeHandler()
     OBSERVER = Observer()
