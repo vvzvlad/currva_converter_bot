@@ -14,10 +14,10 @@ class CurrencyFormatter:
     def __init__(self):
         # Currency code -> (flag, symbol)
         self.currency_formats = {
-            'ILS': ('🇮🇱', '₪'),
-            'GBP': ('🇬🇧', '£'),
             'RUB': ('🇷🇺', '₽'),
             'USD': ('🇺🇸', '$'),
+            'ILS': ('🇮🇱', '₪'),
+            'GBP': ('🇬🇧', '£'),
             'EUR': ('🇪🇺', '€'),
             'JPY': ('🇯🇵', '¥'),
             'AMD': ('🇦🇲', '֏'),
@@ -30,7 +30,7 @@ class CurrencyFormatter:
         # Все поддерживаемые валюты
         self.target_currencies = list(self.currency_formats.keys())
         # Валюты для показа в сообщении (основные)
-        self.display_currencies = ['USD', 'EUR', 'GBP', 'RUB', 'ILS', "JPY", "AMD"]
+        self.display_currencies = ['RUB', 'USD', 'ILS', 'EUR', 'GBP', "JPY", "AMD"]
 
     def _format_amount(self, amount: Decimal, currency: str) -> str:
         """Format amount with currency symbol and flag"""
