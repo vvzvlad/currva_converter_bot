@@ -244,6 +244,7 @@ def handle_inline_query(query):
             )
         ]
         bot.answer_inline_query(query.id, results)
+        logger.info(f"Processed inline query '{query.query}'")
         statistics_manager.log_request(user=query.from_user, chat_id=None, chat_title=None, is_inline=True)
 
     except Exception as e:
@@ -285,6 +286,7 @@ def handle_message(message):
         )
         if response: 
             bot.reply_to(message, response)
+            logger.info(f"Processed message '{message.text}' in chat '{message.chat.title}'")
             statistics_manager.log_request(user=message.from_user, chat_id=message.chat.id, chat_title=message.chat.title)
 
     except Exception as e:
