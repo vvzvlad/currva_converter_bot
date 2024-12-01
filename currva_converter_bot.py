@@ -85,7 +85,7 @@ def send_statistics(message):
         f"Уникальных пользователей: {stats['unique_users']}\n"
         f"Уникальных чатов: {stats['unique_chats']}\n\n"
         f"Топ-10 пользователей:\n"
-        + "\n".join(f"@{user['username'] or 'Unknown'}: {user['requests']}" 
+        + "\n".join(f"{user['display_name']}: {user['requests']}" 
                     for user in stats['top_users'])
         + "\n\nТоп-10 чатов:\n"
         + "\n".join(f"{chat['title']}: {chat['requests']}" 
@@ -101,6 +101,7 @@ def handle_inline_query(query):
         statistics_manager.log_request(
             user_id=query.from_user.id,
             username=query.from_user.username,
+            first_name=query.from_user.first_name,
             chat_id=None,
             chat_title=None
         )
@@ -183,6 +184,7 @@ def handle_message(message):
         statistics_manager.log_request(
             user_id=message.from_user.id,
             username=message.from_user.username,
+            first_name=message.from_user.first_name,
             chat_id=message.chat.id,
             chat_title=message.chat.title
         )

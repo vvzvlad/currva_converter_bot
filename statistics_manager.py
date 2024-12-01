@@ -27,7 +27,7 @@ class StatisticsManager:
         
         logger.info("Statistics manager initialized")
     
-    def log_request(self, user_id: int, username: Optional[str], 
+    def log_request(self, user_id: int, username: Optional[str], first_name: Optional[str],
                     chat_id: Optional[int], chat_title: Optional[str]) -> None:
         """Log a request from user in specific chat"""
         with self._lock:
@@ -44,6 +44,7 @@ class StatisticsManager:
                     if user_id_str not in users:
                         users[user_id_str] = {
                             'username': username,
+                            'first_name': first_name,
                             'requests': 0,
                             'first_seen': datetime.now().isoformat()
                         }
@@ -51,6 +52,8 @@ class StatisticsManager:
                     users[user_id_str]['requests'] += 1
                     if username:  # Update username if available
                         users[user_id_str]['username'] = username
+                    if first_name:  # Update first_name if available
+                        users[user_id_str]['first_name'] = first_name
                     
                     self._db.set('users', users)
                 
@@ -87,7 +90,7 @@ class StatisticsManager:
             # Prepare top users list
             top_users = [
                 {
-                    'username': data['username'],
+                    'display_name': data.get('username') or data.get('first_name') or 'Unknown User',
                     'requests': data['requests']
                 }
                 for user_id, data in users.items()
