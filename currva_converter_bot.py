@@ -79,7 +79,7 @@ def handle_inline_query(query):
                 types.InlineQueryResultArticle(
                     id='2', 
                     title='Дополняй',
-                    description=query.query,
+                    description=f"{query.query} (ничего не найдено)",
                     thumbnail_url='https://raw.githubusercontent.com/vvzvlad/currva_converter_bot/master/assets/insert_small.jpeg', 
                     input_message_content=types.InputTextMessageContent(
                         message_text=query.query
