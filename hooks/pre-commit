@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+
+echo "Activating virtual environment..."
+source .venv/bin/activate
+
+echo "Installing dependencies..."
+pip install -r currva_converter_bot/requirements.txt
+
+echo "Running tests..."
+python3 -m unittest currva_converter_bot/tests.py -v
+
+# If tests pass, allow the commit
+exit 0 
