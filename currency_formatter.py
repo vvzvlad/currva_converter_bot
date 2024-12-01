@@ -28,10 +28,10 @@ class CurrencyFormatter:
             'KZT': ('🇰🇿', '₸'),
             'CAD': ('🇨🇦', 'C$')
         }
-        # Все поддерживаемые валюты
         self.target_currencies = list(self.currency_formats.keys())
-        # Валюты для показа в сообщении (основные)
+        # Currencies to display in the message
         self.display_currencies = ['RUB', 'USD', 'ILS', 'EUR', 'GBP', "JPY", "AMD"]
+        self.symbol_before_number = ['USD', 'EUR', 'GBP', 'CAD']
 
     def _format_amount(self, amount: Decimal, currency: str) -> str:
         """Format amount with currency symbol and flag"""
@@ -49,7 +49,7 @@ class CurrencyFormatter:
             formatted = str(amount.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP))
         
         # For USD, EUR and GBP, place the currency symbol before the number
-        if currency in ['USD', 'EUR', 'GBP']:
+        if currency in self.symbol_before_number:
             return f"{flag} {symbol}{formatted}"
         else:
             return f"{flag} {formatted} {symbol}"
