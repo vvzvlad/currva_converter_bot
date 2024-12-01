@@ -74,7 +74,7 @@ class CurrencyFormatter:
         
         # Initialize message based on mode
         if mode == 'chat':
-            flag, symbol = self.currency_formats[currency]
+            flag, _symbol = self.currency_formats[currency]
             message = f"{original} ({flag}) это"
         elif mode == 'inline':
             message = f"{original}"
