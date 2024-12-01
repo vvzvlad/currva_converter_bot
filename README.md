@@ -44,17 +44,20 @@ A Telegram bot for currency conversion.
 ## Metrics Configuration
 
 The bot can optionally report metrics to InfluxDB. Set `INFLUX_VERSION` to enable metrics reporting:
+
 - `INFLUX_VERSION=2` for InfluxDB v2.x
 - `INFLUX_VERSION=1.8` for InfluxDB v1.8
 - If not set, metrics reporting will be disabled
 
 Common settings:
+
 - `INFLUX_URL` - InfluxDB server URL
 - `INFLUX_REPORTING_PERIOD` - Reporting period in seconds (default: 300, minimum: 10)
 
 ### InfluxDB v2.x Configuration
 
 When `INFLUX_VERSION=2`, set the following environment variables:
+
 - `INFLUX_TOKEN` - API token
 - `INFLUX_ORG` - Organization name
 - `INFLUX_BUCKET` - Bucket name
@@ -62,13 +65,14 @@ When `INFLUX_VERSION=2`, set the following environment variables:
 ### InfluxDB v1.8 Configuration
 
 When `INFLUX_VERSION=1.8`, set the following environment variables:
+
 - `INFLUX_DB` - Database name
 - `INFLUX_USER` - Username
 - `INFLUX_PASSWORD` - Password
 
 The bot will report the following metrics at configured intervals:
+
 - Total requests count
 - Total inline requests count
 - Unique users count
 - Unique chats count
-
