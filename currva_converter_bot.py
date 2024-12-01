@@ -62,7 +62,7 @@ user_settings_manager = UserSettingsManager()
 bot.set_my_commands([
     types.BotCommand("start", "Запустить бота"),
     types.BotCommand("help", "Показать помощь"),
-    types.BotCommand("stats", "Показать статистику (только для админа)"),
+    #types.BotCommand("stats", "Показать статистику (только для админа)"),
     types.BotCommand("currencies", "Настроить отображаемые валюты")
 ])
 
