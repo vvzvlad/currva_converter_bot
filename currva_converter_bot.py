@@ -6,7 +6,6 @@
 #TODO а приникь на "нахуй пошел" он будет игнорить чат какое-то время
 #TODO Ещё интересный момент: как детектить валюту какой страны имел в виду автор? Я например сейчас под песо подразумеваю филиппинские, а кто-то может в Мексике быть
 #TODO дать возможность добавлять произвольные валюты
-#TODO "@currvaconverter_bot влад купил презики за 5к" — крутится бесконечно
 
 
 import logging
@@ -70,7 +69,7 @@ def handle_inline_query(query):
                 types.InlineQueryResultArticle(
                     id='1',
                     title='Конвертировай',
-                    description='Не найдено ничего, что можно конвертировать в другую валюту',
+                    description='Не найдено ничего, что можно конвертировать в другую валюту ¯\_(ツ)_/¯',
                     thumbnail_url='https://raw.githubusercontent.com/vvzvlad/currva_converter_bot/master/assets/convert_small.jpeg',
                     input_message_content=types.InputTextMessageContent(
                         message_text=query.query
@@ -79,7 +78,7 @@ def handle_inline_query(query):
                 types.InlineQueryResultArticle(
                     id='2', 
                     title='Дополняй',
-                    description=f"{query.query} (ничего не найдено)",
+                    description=f"{query.query} (валюты не найдены ¯\_(ツ)_/¯)",
                     thumbnail_url='https://raw.githubusercontent.com/vvzvlad/currva_converter_bot/master/assets/insert_small.jpeg', 
                     input_message_content=types.InputTextMessageContent(
                         message_text=query.query
