@@ -111,9 +111,10 @@ def handle_currencies(message):
             bot.reply_to(message, "Только администраторы чата могут менять настройки валют")
             return
 
-    # Convert to uppercase and filter valid currencies
-    new_currencies = [curr.upper() for curr in args]
+    # Convert to uppercase and filter valid currencies, removing duplicates
+    new_currencies = list(dict.fromkeys([curr.upper() for curr in args]))
     valid_currencies = [curr for curr in new_currencies if curr in currency_formatter.target_currencies]
+    valid_currencies = list(dict.fromkeys(valid_currencies))  # Remove duplicates
     
     if not valid_currencies:
         bot.reply_to(message, "Ошибка: не указано ни одной правильной валюты")
@@ -320,7 +321,11 @@ def signal_handler(_signum, _frame):
 if __name__ == '__main__':
     logger.info(f"Bot name: @{bot.get_me().username}")
     logger.info(f"Starting currency converter bot...\n\n\n")
+    
+    # Регистрируем обработчики для разных сигналов
+    signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
+    
     event_handler = CodeChangeHandler()
     OBSERVER = Observer()
     OBSERVER.schedule(event_handler, path='.', recursive=False)
@@ -328,7 +333,7 @@ if __name__ == '__main__':
     
     try:
         logger.info("Starting bot polling...")
-        bot.infinity_polling()
+        bot.infinity_polling(timeout=60, long_polling_timeout=60)
     except Exception as e:
         logger.error(f"Bot crashed with unexpected error: {e}", exc_info=True)
     finally:
