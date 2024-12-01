@@ -52,7 +52,7 @@ class TestCurrencyParsing(unittest.TestCase):
         test("пять баксов", [])
         test("three hundred bucks", [])
         
-        test("100 рублейff", [(100.0, "RUB", "100 рублей")])
+        test("100 рублейf", [(100.0, "RUB", "100 рублей")])
         test("200 рубль", [(200.0, "RUB", "200 рубль")])
         test("300 рубля", [(300.0, "RUB", "300 рубля")])
         test("400 rub", [(400.0, "RUB", "400 rub")])
