@@ -30,6 +30,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+OBSERVER = None
 
 bot_token = os.getenv('BOT_TOKEN')
 if not bot_token:
@@ -218,25 +219,22 @@ class CodeChangeHandler(FileSystemEventHandler):
                 except Exception as e:
                     logger.error(f"Failed to restart bot: {e}")
 
-# Global observer instance for file watching
-observer = None
 
-def signal_handler(signum, frame):
+def signal_handler(_signum, _frame):
     """Handle Ctrl+C signal"""
-    global observer
     logger.info("Received shutdown signal, stopping...")
-    if observer:
-        observer.stop()
-        observer.join()
+    if OBSERVER:
+        OBSERVER.stop()
+        OBSERVER.join()
     sys.exit(0)
 
 if __name__ == '__main__':
     logger.info(f"\n\n\nStarting currency converter bot @{bot.get_me().username}...")
     signal.signal(signal.SIGINT, signal_handler)
     event_handler = CodeChangeHandler()
-    observer = Observer()
-    observer.schedule(event_handler, path='.', recursive=False)
-    observer.start()
+    OBSERVER = Observer()
+    OBSERVER.schedule(event_handler, path='.', recursive=False)
+    OBSERVER.start()
     
     try:
         logger.info("Starting bot polling...")
@@ -244,6 +242,6 @@ if __name__ == '__main__':
     except Exception as e:
         logger.error(f"Bot crashed with unexpected error: {e}", exc_info=True)
     finally:
-        observer.stop()
-        observer.join()
+        OBSERVER.stop()
+        OBSERVER.join()
         logger.info("Bot stopped")
