@@ -22,6 +22,7 @@ from watchdog.observers import Observer
 from currency_formatter import CurrencyFormatter
 from currency_parser import CurrencyParser
 from exchange_rates_manager import ExchangeRatesManager
+from statistics_manager import StatisticsManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,13 +44,22 @@ if not api_key:
     sys.exit("Error: API_KEY environment variable is not set.")
 logger.info(f"API key: {api_key}")
 
+admin_user_id = os.getenv('ADMIN_USER_ID')
+if not admin_user_id:
+    logger.error("ADMIN_USER_ID environment variable is not set.")
+    sys.exit("Error: ADMIN_USER_ID environment variable is not set.")
+logger.info(f"Admin user ID: {admin_user_id}")
+
+
 rates_manager = ExchangeRatesManager()
 currency_parser = CurrencyParser()
 currency_formatter = CurrencyFormatter()
+statistics_manager = StatisticsManager()
 
 bot.set_my_commands([
     types.BotCommand("start", "Запустить бота"),
-    types.BotCommand("help", "Показать помощь")
+    types.BotCommand("help", "Показать помощь"),
+    types.BotCommand("stats", "Показать статистику (только для админа)")
 ])
 
 @bot.message_handler(commands=['start', 'help'])
@@ -60,16 +70,47 @@ def send_welcome(message):
                         "с конвертацией этой суммы в другие валюты: '100 шекелей (🇮🇱) это 🇺🇸 $28, 🇪🇺 €26, 🇬🇧 £22, 🇷🇺 2932 ₽, 🇯🇵 4124 ¥, 🇦🇲 10 868 ֏' \n"
                         "Тоже самое можно просто писать ему в личку (он ответит там) или написать '@currvaconverter_bot 100 шекелей' в любом чате(в диалогах тоже), чтобы использовать инлайн режим\n")
 
+
+@bot.message_handler(commands=['stats'])
+def send_statistics(message):
+    if message.from_user.id != int(admin_user_id):
+        bot.reply_to(message, "У вас нет доступа к этой команде")
+        return
+        
+    stats = statistics_manager.get_statistics()
+    
+    response = (
+        f"📊 Статистика бота:\n\n"
+        f"Всего запросов: {stats['total_requests']}\n"
+        f"Уникальных пользователей: {stats['unique_users']}\n"
+        f"Уникальных чатов: {stats['unique_chats']}\n\n"
+        f"Топ-10 пользователей:\n"
+        + "\n".join(f"@{user['username'] or 'Unknown'}: {user['requests']}" 
+                    for user in stats['top_users'])
+        + "\n\nТоп-10 чатов:\n"
+        + "\n".join(f"{chat['title']}: {chat['requests']}" 
+                    for chat in stats['top_chats'])
+    )
+    
+    bot.reply_to(message, response)
+
+
 @bot.inline_handler(lambda query: len(query.query) > 0)
 def handle_inline_query(query):
     try:
+        statistics_manager.log_request(
+            user_id=query.from_user.id,
+            username=query.from_user.username,
+            chat_id=None,
+            chat_title=None
+        )
         found_currencies = currency_parser.find_currencies(query.query)
         if not found_currencies:
             results = [
                 types.InlineQueryResultArticle(
                     id='1',
                     title='Конвертировай',
-                    description='Не найдено ничего, что можно конвертировать в другую валюту ¯\_(ツ)_/¯',
+                    description=r'Не найдено ничего, что можно конвертировать в другую валюту ¯\_(ツ)_/¯',
                     thumbnail_url='https://raw.githubusercontent.com/vvzvlad/currva_converter_bot/master/assets/convert_small.jpeg',
                     input_message_content=types.InputTextMessageContent(
                         message_text=query.query
@@ -78,7 +119,7 @@ def handle_inline_query(query):
                 types.InlineQueryResultArticle(
                     id='2', 
                     title='Дополняй',
-                    description=f"{query.query} (валюты не найдены ¯\_(ツ)_/¯)",
+                    description=fr"{query.query} (валюты не найдены ¯\_(ツ)_/¯)",
                     thumbnail_url='https://raw.githubusercontent.com/vvzvlad/currva_converter_bot/master/assets/insert_small.jpeg', 
                     input_message_content=types.InputTextMessageContent(
                         message_text=query.query
@@ -139,6 +180,12 @@ def handle_message(message):
     if message.forward_from or message.via_bot: return
         
     try:
+        statistics_manager.log_request(
+            user_id=message.from_user.id,
+            username=message.from_user.username,
+            chat_id=message.chat.id,
+            chat_title=message.chat.title
+        )
         found_currencies = currency_parser.find_currencies(message.text)
         if not found_currencies:
             return  
@@ -156,6 +203,7 @@ def handle_message(message):
     except Exception as e:
         logger.error(f"Error processing message '{message.text}': {str(e)}")
         #bot.reply_to(message, "Произошла ошибка при обработке вашего запроса")
+
 
 class CodeChangeHandler(FileSystemEventHandler):
     def __init__(self):
@@ -188,7 +236,7 @@ def signal_handler(signum, frame):
     sys.exit(0)
 
 if __name__ == '__main__':
-    logger.info("\n\n\nStarting currency converter bot...")
+    logger.info(f"\n\n\nStarting currency converter bot @{bot.get_me().username}...")
     signal.signal(signal.SIGINT, signal_handler)
     event_handler = CodeChangeHandler()
     observer = Observer()

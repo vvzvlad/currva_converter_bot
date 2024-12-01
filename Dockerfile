@@ -8,5 +8,6 @@ COPY currva_converter_bot.py .
 COPY exchange_rates_manager.py .
 COPY currency_formatter.py .
 COPY currency_parser.py .
+COPY statistics_manager.py .
 
 CMD ["python", "currva_converter_bot.py"]
