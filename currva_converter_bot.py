@@ -125,7 +125,7 @@ def handle_currencies(message):
     invalid_currencies = set(new_currencies) - set(valid_currencies)
     response = ""
     if invalid_currencies:
-        response += f"\nНеправильные коды валют: {', '.join(invalid_currencies)}"
+        response += f"\nНекорректные коды валют: {', '.join(invalid_currencies)}, доступные: {', '.join(currency_formatter.target_currencies)}"
     if is_chat:
         response += f"\nУстановлены валюты чата: {', '.join(valid_currencies)}"
     else:
