@@ -78,14 +78,17 @@ def send_statistics(message):
         return
         
     stats = statistics_manager.get_statistics()
-    
+
     response = (
         f"📊 Статистика бота:\n\n"
-        f"Всего запросов: {stats['total_requests']}\n"
+        f"Всего обычных запросов: {stats['total_requests']}\n"
+        f"Всего инлайн-запросов: {stats['total_inline_requests']}\n"
         f"Уникальных пользователей: {stats['unique_users']}\n"
         f"Уникальных чатов: {stats['unique_chats']}\n\n"
         f"Топ-10 пользователей:\n"
-        + "\n".join(f"{user['display_name']}: {user['requests']}" 
+        + "\n".join(f"{('@' + user['username']) if user.get('username') else user['display_name']}: "
+                    f"{user['total_requests']} (обычных: {user['requests']}, инлайн: {user['inline_requests']}) "
+                    f"[активность: {user['last_active_str']}]" 
                     for user in stats['top_users'])
         + "\n\nТоп-10 чатов:\n"
         + "\n".join(f"{chat['title']}: {chat['requests']}" 
@@ -98,13 +101,7 @@ def send_statistics(message):
 @bot.inline_handler(lambda query: len(query.query) > 0)
 def handle_inline_query(query):
     try:
-        statistics_manager.log_request(
-            user_id=query.from_user.id,
-            username=query.from_user.username,
-            first_name=query.from_user.first_name,
-            chat_id=None,
-            chat_title=None
-        )
+        
         found_currencies = currency_parser.find_currencies(query.query)
         if not found_currencies:
             results = [
@@ -171,7 +168,8 @@ def handle_inline_query(query):
             )
         ]
         bot.answer_inline_query(query.id, results)
-
+        statistics_manager.log_request(user=query.from_user, chat_id=None, chat_title=None, is_inline=True)
+        
     except Exception as e:
         logger.error(f"Error processing inline query '{query.query}': {str(e)}")
         traceback.print_exc()
@@ -181,13 +179,6 @@ def handle_message(message):
     if message.forward_from or message.via_bot: return
         
     try:
-        statistics_manager.log_request(
-            user_id=message.from_user.id,
-            username=message.from_user.username,
-            first_name=message.from_user.first_name,
-            chat_id=message.chat.id,
-            chat_title=message.chat.title
-        )
         found_currencies = currency_parser.find_currencies(message.text)
         if not found_currencies:
             return  
@@ -200,8 +191,10 @@ def handle_message(message):
                         rates[f"{curr}_{target}"] = rate
         
         response = currency_formatter.format_multiple_conversions(found_currencies, rates)
-        if response: bot.reply_to(message, response)
-        
+        if response: 
+            bot.reply_to(message, response)
+            statistics_manager.log_request(user=message.from_user, chat_id=message.chat.id, chat_title=message.chat.title)
+
     except Exception as e:
         logger.error(f"Error processing message '{message.text}': {str(e)}")
         #bot.reply_to(message, "Произошла ошибка при обработке вашего запроса")
