@@ -14,7 +14,7 @@ import os
 import signal
 import sys
 import time
-
+import traceback
 import telebot
 from telebot import types
 from watchdog.events import FileSystemEventHandler
@@ -133,6 +133,7 @@ def handle_inline_query(query):
 
     except Exception as e:
         logger.error(f"Error processing inline query '{query.query}': {str(e)}")
+        traceback.print_exc()
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):

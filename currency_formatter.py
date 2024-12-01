@@ -25,7 +25,8 @@ class CurrencyFormatter:
             'GEL': ('🇬🇪', '₾'),
             'RSD': ('🇷🇸', '₩'),
             'THB': ('🇹🇭', '฿'),
-            'KZT': ('🇰🇿', '₸')
+            'KZT': ('🇰🇿', '₸'),
+            'CAD': ('🇨🇦', 'C$')
         }
         # Все поддерживаемые валюты
         self.target_currencies = list(self.currency_formats.keys())
