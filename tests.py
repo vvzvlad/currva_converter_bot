@@ -44,7 +44,6 @@ class TestCurrencyParsing(unittest.TestCase):
         test("700 £", [(700.0, "GBP", "700 £")])
         test("£ 800", []) 
         test("1.2.3 доллара", [(2.3, 'USD', '2.3 доллара')]) 
-        test("2 песо", [])
         test("77 тугриков", [])
         test("7666777 kwd", [])
         test("100500 CAD вышло", [(100500.0, 'CAD', '100500 CAD')])
@@ -252,6 +251,11 @@ class TestCurrencyParsing(unittest.TestCase):
         test("0.2 €", [(0.2, "EUR", "0.2 €")])
         test("0.2€", [(0.2, "EUR", "0.2€")])
 
+        test("0.2 MXN", [(0.2, "MXN", "0.2 MXN")])
+        test("0.2MXN", [(0.2, "MXN", "0.2MXN")])
+        test("0.2 мексиканского песо", [(0.2, "MXN", "0.2 мексиканского песо")])
+        test("0.2 песо", [(0.2, "MXN", "0.2 песо")])
+
 
         test("-5 рублей", [(5.0, "RUB", "5 рублей")])
         test("10 рублей + 20 фунтов", [(10.0, "RUB", "10 рублей"), (20.0, "GBP", "20 фунтов")])
@@ -308,7 +312,6 @@ class TestCurrencyParsing(unittest.TestCase):
         test("null долларов", [])
         test("Бля рубля", [])
         test("1 шахерезада", [])
-        test("20 песо", [])
         test("30 пхп", [])
         test("100500 кгам", [])
         test("1337 чего блядь", [])
@@ -510,7 +513,6 @@ class TestCurrencyFormatting(unittest.TestCase):
         test("Влад скинь длооаров пабрацки", None)
         test("Пица рублей", None)
         test("пицот рублей", None)
-        test("100 песо", None)
         test("``5+5`` долларов", None)
         test("Звоните мне на +79936969420", None)
         test("у меня когда-то в Додо был пин-код 1488, чтобы додорубли списывать", None)

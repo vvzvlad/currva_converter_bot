@@ -41,6 +41,7 @@ class CurrencyParser:
             ('THB', fr'{self.number}\s*(?:бат(?:ов|а|)|thb|THB)\b'),
             ('KZT', fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
             ('CAD', fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
+            ('MXN', fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
 
             ('USD', fr'{self.number}\s*(?:цент(?:ов|а|)|cent|cents)\b'),
             ('EUR', fr'{self.number}\s*(?:евроцент(?:ов|а|)|eurocent|eurocents)\b'),

@@ -325,7 +325,6 @@ if __name__ == '__main__':
     logger.info(f"Bot name: @{bot.get_me().username}")
     logger.info(f"Starting currency converter bot...\n\n\n")
     
-    # Регистрируем обработчики для разных сигналов
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
     

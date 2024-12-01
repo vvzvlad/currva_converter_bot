@@ -26,7 +26,8 @@ class CurrencyFormatter:
             'RSD': ('🇷🇸', '₩'),
             'THB': ('🇹🇭', '฿'),
             'KZT': ('🇰🇿', '₸'),
-            'CAD': ('🇨🇦', 'C$')
+            'CAD': ('🇨🇦', 'C$'),
+            'MXN': ('🇲🇽', 'MX$')
         }
         self.target_currencies = list(self.currency_formats.keys())
         # Currencies to display in the message
