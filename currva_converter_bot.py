@@ -66,6 +66,8 @@ bot.set_my_commands([
     types.BotCommand("currencies", "Настроить отображаемые валюты")
 ])
 
+START_TIME = time.time()
+
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     bot.reply_to(message, "Бот конвертирует валюты. Он написан специально для чатов, в которых много людей из разных стран, которые постоянно говорят 'а я купил за 100 фунтов телевизор'.\n "
@@ -249,6 +251,10 @@ def handle_inline_query(query):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     if message.forward_from or message.via_bot: 
+        return
+        
+    if message.date < START_TIME - 10:
+        logger.debug(f"Skipping old message from {message.date}, bot start time: {START_TIME}")
         return
         
     try:
