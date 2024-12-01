@@ -5,10 +5,14 @@ echo "Activating virtual environment..."
 source .venv/bin/activate
 
 echo "Installing dependencies..."
-pip install -r currva_converter_bot/requirements.txt
+pip install -r requirements.txt 2>&1 > /dev/null
 
 echo "Running tests..."
-python3 -m unittest currva_converter_bot/tests.py -v
+python3 -m unittest tests.py -v 2>&1 > /dev/null
 
 # If tests pass, allow the commit
 exit 0 
+
+
+#chmod +x hooks/pre-commit
+#ln -s ../../hooks/pre-commit .git/hooks/pre-commit
