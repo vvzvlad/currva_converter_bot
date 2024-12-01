@@ -169,7 +169,7 @@ def handle_inline_query(query):
         ]
         bot.answer_inline_query(query.id, results)
         statistics_manager.log_request(user=query.from_user, chat_id=None, chat_title=None, is_inline=True)
-        
+
     except Exception as e:
         logger.error(f"Error processing inline query '{query.query}': {str(e)}")
         traceback.print_exc()
@@ -183,7 +183,7 @@ def handle_message(message):
         if not found_currencies:
             return  
         rates = {}
-        for amount, curr, _ in found_currencies:
+        for _amount, curr, _ in found_currencies:
             for target in currency_formatter.target_currencies:
                 if target != curr:
                     rate = rates_manager.get_rate(curr, target)
