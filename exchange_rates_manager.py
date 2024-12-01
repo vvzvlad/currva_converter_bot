@@ -16,8 +16,9 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+UPDATES_INTERVAL = 12 * 60 * 60  # 12 hours
 class ExchangeRatesManager:
-    def __init__(self, cache_file: str = 'exchange_rates_cache.json'):
+    def __init__(self, cache_file: str = 'data/exchange_rates_cache.json'):
         self._cache_file = Path(cache_file)
         self._rates: Dict = {}
         self._last_update: Optional[datetime] = None
@@ -68,7 +69,7 @@ class ExchangeRatesManager:
     def _update_thread(self) -> None:
         """Background thread for periodic rates updates"""
         while True:
-            time.sleep(12 * 60 * 60)  # Sleep for 5 hours
+            time.sleep(UPDATES_INTERVAL)  
             self._update_all_rates()
     
     def _start_update_thread(self) -> None:
