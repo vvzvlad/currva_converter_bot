@@ -69,6 +69,7 @@ bot.set_my_commands([
 START_TIME = time.time()
 MAX_TIME_DELTA = 10 #time delta to skip old messages in group chats
 
+
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     bot.reply_to(message, "Бот конвертирует валюты. Он написан специально для чатов, в которых много людей из разных стран, которые постоянно говорят 'а я купил за 100 фунтов телевизор'.\n "
@@ -259,16 +260,30 @@ def handle_inline_query(query):
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    if message.forward_from or message.via_bot: 
-        return
-        
-    if message.date < START_TIME - MAX_TIME_DELTA:
-        logger.debug(f"Skipping old message from {message.date}, bot start time: {START_TIME}")
-        return
-        
     try:
-        found_currencies = currency_parser.find_currencies(message.text)
+        if message.forward_from or message.via_bot: 
+            return
+            
+        if message.date < START_TIME - MAX_TIME_DELTA:
+            logger.debug(f"Skipping old message from {message.date}, bot start time: {START_TIME}")
+            return
+
         is_chat = message.chat.type in ['group', 'supergroup']
+
+        # Check if chat is disabled
+        if is_chat and user_settings_manager.is_chat_disabled(message.chat.id):
+            return
+        
+        # Check for ignore trigger phrases in group chats
+        ignore_phrases = ["нахуй пошел", "нахуй иди", "пошел нахуй", "заткнись", "заткнись сука", "заткнись сука", "отключись"]
+        ignore_duration = 5 * 60  # 5 minutes in seconds
+        if is_chat and message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
+            if any(phrase in message.text.lower() for phrase in ignore_phrases):
+                user_settings_manager.set_chat_disabled(message.chat.id, ignore_duration)
+                bot.reply_to(message, "Ну и конвертируйте сами теперь")
+                return
+            
+        found_currencies = currency_parser.find_currencies(message.text)
         
         if not found_currencies:
             if not is_chat:

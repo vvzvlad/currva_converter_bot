@@ -7,6 +7,7 @@ from typing import List, Optional
 import logging
 from pathlib import Path
 import pickledb
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -33,3 +34,24 @@ class UserSettingsManager:
         key = f"{prefix}:{entity_id}:currencies"
         self._db.set(key, currencies)
         logger.info(f"Updated currencies for {prefix} {entity_id}: {currencies}")
+
+    def is_chat_disabled(self, chat_id: int) -> bool:
+        """Check if chat is currently disabled"""
+        key = f"chat:{chat_id}:disabled_until"
+        if not self._db.exists(key):
+            return False
+            
+        disabled_until = self._db.get(key)
+        if disabled_until > time.time():
+            return True
+            
+        # Clean up expired state
+        self._db.rem(key)
+        return False
+
+    def set_chat_disabled(self, chat_id: int, duration_seconds: int) -> None:
+        """Set chat to be disabled for specified duration"""
+        key = f"chat:{chat_id}:disabled_until"
+        disabled_until = time.time() + duration_seconds
+        self._db.set(key, disabled_until)
+        logger.info(f"Chat {chat_id} will be disabled until {disabled_until}")
