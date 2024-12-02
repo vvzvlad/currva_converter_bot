@@ -276,7 +276,7 @@ def handle_message(message):
             return
         
         # Check for ignore trigger phrases in group chats
-        ignore_phrases = ["нахуй пошел", "нахуй иди", "пошел нахуй", "заткнись", "заткнись сука", "заткнись сука", "отключись"]
+        ignore_phrases = ["нахуй", "заткнись", "отключись"]
         ignore_duration = 5 * 60  # 5 minutes in seconds
         if is_chat and message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
             if any(phrase in message.text.lower() for phrase in ignore_phrases):
