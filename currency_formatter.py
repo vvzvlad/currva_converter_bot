@@ -29,7 +29,8 @@ class CurrencyFormatter:
             'CAD': ('🇨🇦', 'C$'),
             'MXN': ('🇲🇽', 'MX$'),
             'TRY': ('🇹🇷', '₺'),
-            'PLN': ('🇵🇱', 'zł')
+            'PLN': ('🇵🇱', 'zł'),
+            'CZK': ('🇨🇿', 'Kč'),
         }
         self.target_currencies = list(self.currency_formats.keys())
         # Currencies to display in the message

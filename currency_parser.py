@@ -33,7 +33,6 @@ class CurrencyParser:
             ('JPY', fr'¥{self.number}\b'),
             ('JPY', fr'{self.number}\s*(?:йен(?:а|ы|)|¥|jpy|JPY)\b'),
             ('JPY', fr'{self.number}\s*¥'),
-            
             ('AMD', fr'{self.number}\s*(?:драм(?:ов|а|))\b'),
             ('CNY', fr'{self.number}\s*(?:юан(?:ей|я|ь)|cny|CNY)\b'),
             ('GEL', fr'{self.number}\s*(?:лари|gel|GEL)\b'),
@@ -51,6 +50,9 @@ class CurrencyParser:
             ('TRY', fr'{self.number}\s*₤'),
             ('TRY', fr'₤{self.number}\b'),
             ('TRY', fr'₺{self.number}\b'),
+
+            ('CZK', fr'{self.number}\s*(?:крон(?:а|ы|)|чешск(?:ая|ой|их|ую) крон(?:а|ы|)|czk|CZK|Kč|Kč)\b'),
+            ('CZK', fr'{self.number}\s*Kč'),
 
             ('USD', fr'{self.number}\s*(?:цент(?:ов|а|)|cent|cents)\b'),
             ('EUR', fr'{self.number}\s*(?:евроцент(?:ов|а|)|eurocent|eurocents)\b'),
