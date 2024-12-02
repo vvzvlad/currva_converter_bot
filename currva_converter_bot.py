@@ -267,10 +267,13 @@ def handle_message(message):
         
     try:
         found_currencies = currency_parser.find_currencies(message.text)
+        is_chat = message.chat.type in ['group', 'supergroup']
+        
         if not found_currencies:
+            if not is_chat:
+                bot.reply_to(message, "Не нашел ничего, что можно конвертировать в другую валюту ¯\\_(ツ)_/¯")
             return  
 
-        is_chat = message.chat.type in ['group', 'supergroup']
         entity_id = message.chat.id if is_chat else message.from_user.id
         user_currencies = user_settings_manager.get_currencies(entity_id, is_chat)
         
