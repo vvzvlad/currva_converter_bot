@@ -18,6 +18,10 @@ class StatisticsManager:
         self._lock = threading.Lock()
         self._db = pickledb.load(db_file, auto_dump=True)
         
+        # Statistics settings
+        self.TOP_USERS_COUNT = 25
+        self.TOP_CHATS_COUNT = 10
+        
         # Initialize InfluxDB attributes
         self._influx_configured = False
         self._influx_params = None
@@ -110,19 +114,8 @@ class StatisticsManager:
 
     def log_request(self, user: User, chat_id: Optional[int], chat_title: Optional[str], is_inline: bool = False) -> None:
         """Log a request from user in specific chat"""
-        logger.debug(
-            f"log_request called with params: user_id={user.id}, "
-            f"chat_id={chat_id} ({type(chat_id)}), "
-            f"chat_title={chat_title}, is_inline={is_inline}"
-        )
-        
         with self._lock:
             try:
-                # Validate chat_id type
-                if chat_id is not None and not isinstance(chat_id, int):
-                    logger.error(f"Invalid chat_id type: {type(chat_id)}, expected int")
-                    chat_id = None
-                
                 # Update total requests
                 if is_inline:
                     total_inline = self._db.get('total_inline_requests')
@@ -186,8 +179,12 @@ class StatisticsManager:
             except Exception as e:
                 logger.error(f"Failed to log request: {e}")
     
-    def get_statistics(self) -> Dict:
-        """Get current statistics"""
+    def get_statistics(self, stat_limit: int) -> Dict:
+        """Get current statistics
+
+        Args:
+            stat_limit: Number of users and chats to return in top list.
+        """
         with self._lock:
             users = self._db.get('users') or {}
             chats = self._db.get('chats') or {}
@@ -207,7 +204,7 @@ class StatisticsManager:
             ]
             
             # Sort by total requests and add time info to display
-            top_users = sorted(top_users, key=lambda x: x['total_requests'], reverse=True)[:10]
+            top_users = sorted(top_users, key=lambda x: x['total_requests'], reverse=True)[:stat_limit]
             for user in top_users:
                 last_active_delta = datetime.now() - user['last_active']
                 if last_active_delta.days > 0:
@@ -225,7 +222,7 @@ class StatisticsManager:
                 }
                 for _chat_id, data in chats.items()
             ]
-            top_chats = sorted(top_chats, key=lambda x: x['requests'], reverse=True)[:10]
+            top_chats = sorted(top_chats, key=lambda x: x['requests'], reverse=True)[:stat_limit]
 
             # Return statistics dictionary
             return {

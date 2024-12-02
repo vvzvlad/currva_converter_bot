@@ -140,8 +140,13 @@ def send_statistics(message):
     if message.from_user.id != int(admin_user_id):
         bot.reply_to(message, "У вас нет доступа к этой команде")
         return
+    
+    try:
+        stat_limit = int(message.text.split()[1]) if len(message.text.split()) > 1 else 10
+    except ValueError:
+        stat_limit = 10
         
-    stats = statistics_manager.get_statistics()
+    stats = statistics_manager.get_statistics(stat_limit)
 
     response = (
         f"📊 Статистика бота:\n\n"
@@ -149,12 +154,12 @@ def send_statistics(message):
         f"Всего инлайн-запросов: {stats['total_inline_requests']}\n"
         f"Уникальных пользователей: {stats['unique_users']}\n"
         f"Уникальных чатов: {stats['unique_chats']}\n\n"
-        f"Топ-10 пользователей:\n"
+        f"Топ-{stat_limit} пользователей:\n"
         + "\n".join(f"{('@' + user['username']) if user.get('username') else user['display_name']}: "
                     f"{user['total_requests']} (обычных: {user['requests']}, инлайн: {user['inline_requests']}) "
                     f"[активность: {user['last_active_str']}]" 
                     for user in stats['top_users'])
-        + "\n\nТоп-10 чатов:\n"
+        + f"\n\nТоп-{stat_limit} чатов:\n"
         + "\n".join(f"{chat['title']}: {chat['requests']}" 
                     for chat in stats['top_chats'])
     )
