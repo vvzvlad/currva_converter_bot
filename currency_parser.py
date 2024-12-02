@@ -12,51 +12,55 @@ class CurrencyParser:
         self.current_match = ''
 
         self.patterns = [
-            ('ILS', fr'{self.number}\s*(?:шекел(?:ей|я|ь)|шек|шах|ils|ILS|₪)\b'),
-            ('ILS', fr'{self.number}\s*₪'),
+            ('ILS',     fr'{self.number}\s*(?:шекел(?:ей|я|ь)|шек|шах|ils|ILS|₪)\b'),
+            ('ILS',     fr'{self.number}\s*₪'),
+    
+            ('GBP',     fr'(?:£){self.number}\b'),
+            ('GBP',     fr'{self.number}\s*(?:фунт(?:ов|а|)|паунд(?:ов|а|)|pound|gbp|GBP|gbr|GBR|£)\b'),
+            ('GBP',     fr'{self.number}\s*£'),
+    
+            ('RUB',     fr'{self.number}\s*(?:руб(?:лей|ля|ль)|₽|rub|RUB)\b'),
+            ('RUB',     fr'{self.number}\s*₽'),
+            ('RUBK',     fr'{self.number}\s*(?:килоруб(?:лей|ля|ль))\b'),
+            ('RUBK',     r'(?P<amount>)килоруб(?:лей|ля|ль)\b'),
+                
+            ('USD',     fr'\${self.number}\b'),
+            ('USD',     fr'{self.number}\s*(?:доллар(?:ов|а|)|бакс(?:ов|а|)|usd|USD|\$)\b'),
+            ('USD',     fr'{self.number}\s*\$'),
+            ('USDCENT', fr'{self.number}\s*(?:цент(?:ов|а|)|cent|cents)\b'),
+            ('USDK',     fr'{self.number}\s*(?:килобакс(?:ов|а|))\b'),
+            ('USDK',     r'(?P<amount>)килобакс(?:ов|а|)\b'),
 
-            ('GBP', fr'(?:£){self.number}\b'),
-            ('GBP', fr'{self.number}\s*(?:фунт(?:ов|а|)|паунд(?:ов|а|)|pound|gbp|GBP|gbr|GBR|£)\b'),
-            ('GBP', fr'{self.number}\s*£'),
+            ('EUR',     fr'€{self.number}\b'),
+            ('EUR',     fr'{self.number}\s*(?:евро|eur|EUR|€)\b'),
+            ('EUR',     fr'{self.number}\s*€'),
+            ('EURCENT', fr'{self.number}\s*(?:евроцент(?:ов|а|)|eurocent|eurocents)\b'),
+            ('EURK',     fr'{self.number}\s*(?:килоевро|eurk|EURK)\b'),
+            ('EURK',     r'(?P<amount>)килоевро(?:ов|а|)\b'),
 
-            ('RUB', fr'{self.number}\s*(?:руб(?:лей|ля|ль)|₽|rub|RUB)\b'),
-            ('RUB', fr'{self.number}\s*₽'),
-            
-            ('USD', fr'\${self.number}\b'),
-            ('USD', fr'{self.number}\s*(?:доллар(?:ов|а|)|бакс(?:ов|а|)|usd|USD|\$)\b'),
-            ('USD', fr'{self.number}\s*\$'),
-            ('USD', fr'{self.number}\s*(?:цент(?:ов|а|)|cent|cents)\b'),
-            ('USD', fr'{self.number}\s*(?:килобакс(?:ов|а|))\b'),
-            ('USD', r'(?P<amount>)килобакс(?:ов|а|)\b'),
+            ('JPY',     fr'¥{self.number}\b'),
+            ('JPY',     fr'{self.number}\s*(?:йен(?:а|ы|)|¥|jpy|JPY)\b'),
+            ('JPY',     fr'{self.number}\s*¥'),
+            ('AMD',     fr'{self.number}\s*(?:драм(?:ов|а|))\b'),
+            ('CNY',     fr'{self.number}\s*(?:юан(?:ей|я|ь)|cny|CNY)\b'),
+            ('GEL',     fr'{self.number}\s*(?:лари|gel|GEL)\b'),
+            ('RSD',     fr'{self.number}\s*(?:динар(?:ов|а|)|rsd|RSD)\b'),
+            ('THB',     fr'{self.number}\s*(?:бат(?:ов|а|)|thb|THB)\b'),
+            ('KZT',     fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
+            ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
+            ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
 
-            ('EUR', fr'€{self.number}\b'),
-            ('EUR', fr'{self.number}\s*(?:евро|eur|EUR|€)\b'),
-            ('EUR', fr'{self.number}\s*€'),
-            ('EUR', fr'{self.number}\s*(?:евроцент(?:ов|а|)|eurocent|eurocents)\b'),
+            ('PLN',     fr'{self.number}\s*(?:злот(?:ый|ых|ого|ые)|pln|PLN|zł)\b'),
+            ('PLN',     fr'{self.number}\s*zł'),
 
-            ('JPY', fr'¥{self.number}\b'),
-            ('JPY', fr'{self.number}\s*(?:йен(?:а|ы|)|¥|jpy|JPY)\b'),
-            ('JPY', fr'{self.number}\s*¥'),
-            ('AMD', fr'{self.number}\s*(?:драм(?:ов|а|))\b'),
-            ('CNY', fr'{self.number}\s*(?:юан(?:ей|я|ь)|cny|CNY)\b'),
-            ('GEL', fr'{self.number}\s*(?:лари|gel|GEL)\b'),
-            ('RSD', fr'{self.number}\s*(?:динар(?:ов|а|)|rsd|RSD)\b'),
-            ('THB', fr'{self.number}\s*(?:бат(?:ов|а|)|thb|THB)\b'),
-            ('KZT', fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
-            ('CAD', fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
-            ('MXN', fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
+            ('TRY',     fr'{self.number}\s*(?:лир(?:а|ы|)|турецк(?:ая|ой|их|ую) лир(?:а|ы|)|try|TRY|₺|₤)\b'),
+            ('TRY',     fr'{self.number}\s*₺'),
+            ('TRY',     fr'{self.number}\s*₤'),
+            ('TRY',     fr'₤{self.number}\b'),
+            ('TRY',     fr'₺{self.number}\b'),
 
-            ('PLN', fr'{self.number}\s*(?:злот(?:ый|ых|ого|ые)|pln|PLN|zł)\b'),
-            ('PLN', fr'{self.number}\s*zł'),
-
-            ('TRY', fr'{self.number}\s*(?:лир(?:а|ы|)|турецк(?:ая|ой|их|ую) лир(?:а|ы|)|try|TRY|₺|₤)\b'),
-            ('TRY', fr'{self.number}\s*₺'),
-            ('TRY', fr'{self.number}\s*₤'),
-            ('TRY', fr'₤{self.number}\b'),
-            ('TRY', fr'₺{self.number}\b'),
-
-            ('CZK', fr'{self.number}\s*(?:крон(?:а|ы|)|чешск(?:ая|ой|их|ую) крон(?:а|ы|)|czk|CZK|Kč|Kč)\b'),
-            ('CZK', fr'{self.number}\s*Kč'),
+            ('CZK',     fr'{self.number}\s*(?:крон(?:а|ы|)|чешск(?:ая|ой|их|ую) крон(?:а|ы|)|czk|CZK|Kč|Kč)\b'),
+            ('CZK',     fr'{self.number}\s*Kč'),
 
         ]
         
@@ -64,20 +68,41 @@ class CurrencyParser:
             (curr, re.compile(pattern, re.IGNORECASE)) 
             for curr, pattern in self.patterns
         ]
-    def _convert_amount(self, amount_str: str) -> float:
-        if not amount_str:
-            return 1000.0
-            
-        if amount_str.lower().endswith('к'):
+    def _convert_amount(self, amount_str: str, currency: str) -> Tuple[float, str]:
+        multiplier = 1
+        clean_amount = amount_str
+        base_currency = currency
+
+        # mapping special currencies to base currencies
+        currency_mapping = {
+            'USDK': 'USD',
+            'EURK': 'EUR',
+            'USDCENT': 'USD',
+            'EURCENT': 'EUR',
+            'RUBK': 'RUB'
+        }
+
+        # multipliers for special currencies
+        currency_multipliers = {
+            'USDK': 1000,
+            'EURK': 1000,
+            'USDCENT': 0.01,
+            'EURCENT': 0.01,
+            'RUBK': 1000
+        }
+
+        # if special currency, apply corresponding multiplier and get base currency
+        if currency in currency_multipliers:
+            multiplier = currency_multipliers[currency]
+            base_currency = currency_mapping[currency]
+            if not amount_str:
+                if currency in ['USDK', 'EURK', 'RUBK']: #for 'кило...' without amount
+                    return 1000.0, base_currency
+                
+        elif amount_str.lower().endswith('к'):
             multiplier = 1000
             clean_amount = amount_str.lower().rstrip('к')
-        elif 'килобакс' in self.current_match.lower():
-            multiplier = 1000
-            clean_amount = amount_str
-        else:
-            multiplier = 1
-            clean_amount = amount_str
-        
+
         # Remove spaces first
         clean_amount = clean_amount.replace(' ', '')
         
@@ -103,11 +128,8 @@ class CurrencyParser:
                     clean_amount = clean_amount.replace(',', '')
             
             amount = float(clean_amount)
-        
-        if any(cent in self.current_match.lower() for cent in ['цент', 'cent']):
-            amount = amount / 100
             
-        return amount * multiplier
+        return amount * multiplier, base_currency
 
     def find_currencies(self, text: str) -> List[Tuple[float, str, str]]:
         """Find currencies in text
@@ -120,11 +142,12 @@ class CurrencyParser:
         for currency, pattern in self.compiled_patterns:
             for match in pattern.finditer(text):
                 self.current_match = match.group(0)
+                amount, base_currency = self._convert_amount(match.group('amount'), currency)
                 matches.append((
                     match.start(),
                     match.end(),
-                    self._convert_amount(match.group('amount')),
-                    currency,
+                    amount,
+                    base_currency,
                     self.current_match
                 ))
         
