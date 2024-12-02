@@ -43,6 +43,15 @@ class CurrencyParser:
             ('CAD', fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
             ('MXN', fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
 
+            ('PLN', fr'{self.number}\s*(?:злот(?:ый|ых|ого|ые)|pln|PLN|zł)\b'),
+            ('PLN', fr'{self.number}\s*zł'),
+
+            ('TRY', fr'{self.number}\s*(?:лир(?:а|ы|)|турецк(?:ая|ой|их|ую) лир(?:а|ы|)|try|TRY|₺|₤)\b'),
+            ('TRY', fr'{self.number}\s*₺'),
+            ('TRY', fr'{self.number}\s*₤'),
+            ('TRY', fr'₤{self.number}\b'),
+            ('TRY', fr'₺{self.number}\b'),
+
             ('USD', fr'{self.number}\s*(?:цент(?:ов|а|)|cent|cents)\b'),
             ('EUR', fr'{self.number}\s*(?:евроцент(?:ов|а|)|eurocent|eurocents)\b'),
         ]
