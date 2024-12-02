@@ -21,14 +21,17 @@ class CurrencyParser:
 
             ('RUB', fr'{self.number}\s*(?:руб(?:лей|ля|ль)|₽|rub|RUB)\b'),
             ('RUB', fr'{self.number}\s*₽'),
-
+            
             ('USD', fr'\${self.number}\b'),
             ('USD', fr'{self.number}\s*(?:доллар(?:ов|а|)|бакс(?:ов|а|)|usd|USD|\$)\b'),
             ('USD', fr'{self.number}\s*\$'),
+            ('USD', fr'{self.number}\s*(?:цент(?:ов|а|)|cent|cents)\b'),
+            ('USD', fr'{self.number}\s*(?:килобакс(?:ов|а|))\b'),
 
             ('EUR', fr'€{self.number}\b'),
             ('EUR', fr'{self.number}\s*(?:евро|eur|EUR|€)\b'),
             ('EUR', fr'{self.number}\s*€'),
+            ('EUR', fr'{self.number}\s*(?:евроцент(?:ов|а|)|eurocent|eurocents)\b'),
 
             ('JPY', fr'¥{self.number}\b'),
             ('JPY', fr'{self.number}\s*(?:йен(?:а|ы|)|¥|jpy|JPY)\b'),
@@ -54,19 +57,19 @@ class CurrencyParser:
             ('CZK', fr'{self.number}\s*(?:крон(?:а|ы|)|чешск(?:ая|ой|их|ую) крон(?:а|ы|)|czk|CZK|Kč|Kč)\b'),
             ('CZK', fr'{self.number}\s*Kč'),
 
-            ('USD', fr'{self.number}\s*(?:цент(?:ов|а|)|cent|cents)\b'),
-            ('EUR', fr'{self.number}\s*(?:евроцент(?:ов|а|)|eurocent|eurocents)\b'),
         ]
         
         self.compiled_patterns = [
             (curr, re.compile(pattern, re.IGNORECASE)) 
             for curr, pattern in self.patterns
         ]
-
     def _convert_amount(self, amount_str: str) -> float:
         if amount_str.lower().endswith('к'):
             multiplier = 1000
             clean_amount = amount_str.lower().rstrip('к')
+        elif 'килобакс' in self.current_match.lower():
+            multiplier = 1000
+            clean_amount = amount_str
         else:
             multiplier = 1
             clean_amount = amount_str
