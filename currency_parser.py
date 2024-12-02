@@ -113,14 +113,12 @@ class CurrencyParser:
             clean_amount = clean_amount.replace(',', '').replace('.', '')
             amount = float(clean_amount)
         else:
-            if ',' in clean_amount and '.' in clean_amount:
-                # If both separators present, last one is decimal
+            if ',' in clean_amount and '.' in clean_amount: # If both separators present, last one is decimal
                 if clean_amount.rindex(',') > clean_amount.rindex('.'):
                     clean_amount = clean_amount.replace('.', '').replace(',', '.')
                 else:
                     clean_amount = clean_amount.replace(',', '')
-            elif ',' in clean_amount:
-                # Check if comma is decimal separator
+            elif ',' in clean_amount: # Check if comma is decimal separator
                 parts = clean_amount.split(',')
                 if len(parts[1]) <= 2:  # Assume decimal if 2 or fewer digits after comma
                     clean_amount = clean_amount.replace(',', '.')
@@ -143,13 +141,7 @@ class CurrencyParser:
             for match in pattern.finditer(text):
                 self.current_match = match.group(0)
                 amount, base_currency = self._convert_amount(match.group('amount'), currency)
-                matches.append((
-                    match.start(),
-                    match.end(),
-                    amount,
-                    base_currency,
-                    self.current_match
-                ))
+                matches.append(( match.start(), match.end(), amount, base_currency, self.current_match ))
         
         # Sort matches by start position
         matches.sort(key=lambda x: x[0])

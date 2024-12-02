@@ -50,7 +50,10 @@ class CurrencyFormatter:
             else:
                 formatted = str(amount_int)
         else:
-            formatted = str(amount.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP))
+            # Round to 1 decimal place
+            rounded = amount.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+            # Convert to string and remove trailing '.0' if present
+            formatted = str(rounded).rstrip('0').rstrip('.')
         
         # For USD, EUR and GBP, place the currency symbol before the number
         if currency in self.symbol_before_number:
