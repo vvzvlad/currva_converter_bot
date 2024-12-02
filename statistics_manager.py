@@ -204,7 +204,11 @@ class StatisticsManager:
             ]
             
             # Sort by total requests and add time info to display
-            top_users = sorted(top_users, key=lambda x: x['total_requests'], reverse=True)[:stat_limit]
+            if stat_limit > 0:
+                top_users = sorted(top_users, key=lambda x: x['total_requests'], reverse=True)[:stat_limit]
+            else:
+                top_users = sorted(top_users, key=lambda x: x['total_requests'], reverse=True)
+
             for user in top_users:
                 last_active_delta = datetime.now() - user['last_active']
                 if last_active_delta.days > 0:
@@ -286,7 +290,7 @@ class StatisticsManager:
                     continue
                 
                 logger.info("[Influx] Getting statistics")
-                stats = self.get_statistics()
+                stats = self.get_statistics(stat_limit=-1)
                 timestamp = int(time.time())
                 
                 line = f"{self._influx_topic} total_requests={stats['total_requests']}i,total_inline_requests={stats['total_inline_requests']}i,unique_users={stats['unique_users']}i,unique_chats={stats['unique_chats']}i {timestamp}"
