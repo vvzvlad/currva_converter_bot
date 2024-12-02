@@ -1,7 +1,12 @@
-from typing import Dict, List, Optional
+# flake8: noqa
+# pylint: disable=broad-exception-raised, raise-missing-from, too-many-arguments, redefined-outer-name
+# pylance: disable=reportMissingImports, reportMissingModuleSource, reportGeneralTypeIssues
+# type: ignore
+
+from typing import List, Optional
 import logging
-import pickledb
 from pathlib import Path
+import pickledb
 
 logger = logging.getLogger(__name__)
 

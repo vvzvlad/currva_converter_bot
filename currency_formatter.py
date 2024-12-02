@@ -76,7 +76,7 @@ class CurrencyFormatter:
                 rate = rates.get(f"{currency}_USD")
                 if rate:
                     usd_amount = Decimal(str(amount)) * Decimal(str(rate))
-            if usd_amount > 1_000_000:
+            if usd_amount >= 1_000_000:
                 return f"Откуда у тебя такие деньги, сынок?"
         
         # Initialize message based on mode
