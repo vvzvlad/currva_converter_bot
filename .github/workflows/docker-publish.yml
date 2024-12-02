@@ -27,5 +27,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/auscultatio_sounds_bot:latest
-            ${{ secrets.DOCKER_HUB_USERNAME }}/auscultatio_sounds_bot:${{ github.sha }}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/currva_converter_bot:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/currva_converter_bot:${{ github.sha }}

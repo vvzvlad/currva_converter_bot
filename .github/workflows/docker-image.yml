@@ -8,11 +8,8 @@ on:
     branches: [ "master" ]
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Log in to GitHub Container Registry
@@ -22,6 +19,8 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GHCR_PAT }}
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag ghcr.io/${{ github.repository }}:latest
-    - name: Push the Docker image
-      run: docker push ghcr.io/${{ github.repository }}:latest
+      run: docker build . --file Dockerfile --tag ghcr.io/${{ github.repository }}:latest --tag ghcr.io/${{ github.repository }}:${{ github.sha }}
+    - name: Push Docker images
+      run: |
+        docker push ghcr.io/${{ github.repository }}:latest
+        docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
