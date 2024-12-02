@@ -67,6 +67,7 @@ bot.set_my_commands([
 ])
 
 START_TIME = time.time()
+MAX_TIME_DELTA = 10 #time delta to skip old messages in group chats
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
@@ -261,7 +262,7 @@ def handle_message(message):
     if message.forward_from or message.via_bot: 
         return
         
-    if message.date < START_TIME - 10:
+    if message.date < START_TIME - MAX_TIME_DELTA:
         logger.debug(f"Skipping old message from {message.date}, bot start time: {START_TIME}")
         return
         
