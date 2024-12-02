@@ -27,6 +27,7 @@ class CurrencyParser:
             ('USD', fr'{self.number}\s*\$'),
             ('USD', fr'{self.number}\s*(?:цент(?:ов|а|)|cent|cents)\b'),
             ('USD', fr'{self.number}\s*(?:килобакс(?:ов|а|))\b'),
+            ('USD', r'(?P<amount>)килобакс(?:ов|а|)\b'),
 
             ('EUR', fr'€{self.number}\b'),
             ('EUR', fr'{self.number}\s*(?:евро|eur|EUR|€)\b'),
@@ -64,6 +65,9 @@ class CurrencyParser:
             for curr, pattern in self.patterns
         ]
     def _convert_amount(self, amount_str: str) -> float:
+        if not amount_str:
+            return 1000.0
+            
         if amount_str.lower().endswith('к'):
             multiplier = 1000
             clean_amount = amount_str.lower().rstrip('к')
