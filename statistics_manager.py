@@ -110,8 +110,19 @@ class StatisticsManager:
 
     def log_request(self, user: User, chat_id: Optional[int], chat_title: Optional[str], is_inline: bool = False) -> None:
         """Log a request from user in specific chat"""
+        logger.debug(
+            f"log_request called with params: user_id={user.id}, "
+            f"chat_id={chat_id} ({type(chat_id)}), "
+            f"chat_title={chat_title}, is_inline={is_inline}"
+        )
+        
         with self._lock:
             try:
+                # Validate chat_id type
+                if chat_id is not None and not isinstance(chat_id, int):
+                    logger.error(f"Invalid chat_id type: {type(chat_id)}, expected int")
+                    chat_id = None
+                
                 # Update total requests
                 if is_inline:
                     total_inline = self._db.get('total_inline_requests')
