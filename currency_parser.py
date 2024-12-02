@@ -41,14 +41,6 @@ class CurrencyParser:
             ('JPY',     fr'¥{self.number}\b'),
             ('JPY',     fr'{self.number}\s*(?:йен(?:а|ы|)|¥|jpy|JPY)\b'),
             ('JPY',     fr'{self.number}\s*¥'),
-            ('AMD',     fr'{self.number}\s*(?:драм(?:ов|а|))\b'),
-            ('CNY',     fr'{self.number}\s*(?:юан(?:ей|я|ь)|cny|CNY)\b'),
-            ('GEL',     fr'{self.number}\s*(?:лари|gel|GEL)\b'),
-            ('RSD',     fr'{self.number}\s*(?:динар(?:ов|а|)|rsd|RSD)\b'),
-            ('THB',     fr'{self.number}\s*(?:бат(?:ов|а|)|thb|THB)\b'),
-            ('KZT',     fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
-            ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
-            ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
 
             ('PLN',     fr'{self.number}\s*(?:злот(?:ый|ых|ого|ые)|pln|PLN|zł)\b'),
             ('PLN',     fr'{self.number}\s*zł'),
@@ -62,6 +54,14 @@ class CurrencyParser:
             ('CZK',     fr'{self.number}\s*(?:крон(?:а|ы|)|чешск(?:ая|ой|их|ую) крон(?:а|ы|)|czk|CZK|Kč|Kč)\b'),
             ('CZK',     fr'{self.number}\s*Kč'),
 
+            ('AMD',     fr'{self.number}\s*(?:драм(?:ов|а|))\b'),
+            ('CNY',     fr'{self.number}\s*(?:юан(?:ей|я|ь)|cny|CNY)\b'),
+            ('GEL',     fr'{self.number}\s*(?:лари|gel|GEL)\b'),
+            ('RSD',     fr'{self.number}\s*(?:динар(?:ов|а|)|rsd|RSD)\b'),
+            ('THB',     fr'{self.number}\s*(?:бат(?:ов|а|)|thb|THB)\b'),
+            ('KZT',     fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
+            ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
+            ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
         ]
         
         self.compiled_patterns = [
@@ -77,18 +77,18 @@ class CurrencyParser:
         currency_mapping = {
             'USDK': 'USD',
             'EURK': 'EUR',
+            'RUBK': 'RUB',
             'USDCENT': 'USD',
             'EURCENT': 'EUR',
-            'RUBK': 'RUB'
         }
 
         # multipliers for special currencies
         currency_multipliers = {
             'USDK': 1000,
             'EURK': 1000,
+            'RUBK': 1000,
             'USDCENT': 0.01,
             'EURCENT': 0.01,
-            'RUBK': 1000
         }
 
         # if special currency, apply corresponding multiplier and get base currency
