@@ -135,10 +135,19 @@ class CurrencyFormatter:
         if not currency_list:
             return None 
             
-        conversions = []
+        # Дедупликация по сумме и валюте
+        seen = set()
+        unique_conversions = []
         for amount, curr, original in currency_list:
+            key = (amount, curr)
+            if key not in seen:
+                seen.add(key)
+                unique_conversions.append((amount, curr, original))
+                
+        conversions = []
+        for amount, curr, original in unique_conversions:
             conversion = self.format_conversion((amount, curr, original), rates, mode=mode, user_currencies=user_currencies)
             if conversion:
                 conversions.append(conversion)
                 
-        return "\n".join(conversions) 
+        return "\n".join(conversions)
