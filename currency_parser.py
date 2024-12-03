@@ -57,6 +57,9 @@ class CurrencyParser:
             ('UAH',     fr'{self.number}\s*(?:гривн(?:а|ы|)|гривен|грн|uah|UAH|₴)\b'),
             ('UAH',     fr'{self.number}\s*₴'),
 
+            ('BYN',     fr'{self.number}\s*(?:белорусск(?:их|ого|ий) руб(?:лей|ля|ль)|byn|BYN|Br)\b'),
+            ('BYN',     fr'{self.number}\s*Br'),
+
             ('AMD',     fr'{self.number}\s*(?:драм(?:ов|а|))\b'),
             ('CNY',     fr'{self.number}\s*(?:юан(?:ей|я|ь)|cny|CNY)\b'),
             ('GEL',     fr'{self.number}\s*(?:лари|gel|GEL)\b'),
