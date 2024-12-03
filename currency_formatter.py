@@ -34,11 +34,13 @@ class CurrencyFormatter:
             'UAH': ('🇺🇦', '₴'),
             'BYN': ('🇧🇾', 'Br'),
             'RON': ('🇷🇴', 'lei'),
+            'MDL': ('🇲🇩', 'lei'),
+            'VND': ('🇻🇳', '₫'),
         }
         self.target_currencies = list(self.currency_formats.keys())
         # Currencies to display in the message
         self.default_currencies = ['RUB', 'USD', 'ILS', 'EUR', 'GBP', "JPY", "AMD"]
-        self.symbol_before_number = ['USD', 'EUR', 'GBP', 'CAD']
+        self.symbol_before_number = ['USD', 'JPY', 'GBP', 'CAD', 'THB']
 
     def _format_amount(self, amount: Decimal, currency: str) -> str:
         """Format amount with currency symbol and flag"""

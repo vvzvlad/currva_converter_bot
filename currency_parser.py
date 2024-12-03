@@ -57,9 +57,8 @@ class CurrencyParser:
             ('UAH',     fr'{self.number}\s*(?:гривн(?:а|ы|)|гривен|грн|uah|UAH|₴)\b'),
             ('UAH',     fr'{self.number}\s*₴'),
 
-            ('BYN',     fr'{self.number}\s*(?:белорусск(?:их|ого|ий) руб(?:лей|ля|ль)|byn|BYN|Br)\b'),
+            ('BYN',     fr'{self.number}\s*(?:белорусск(?:их|ого|ий|ие) руб(?:лей|ля|ль)|беларуск(?:их|ого|ий|ие) руб(?:лей|ля|ль)|byn|BYN|Br)\b'),
             ('BYN',     fr'{self.number}\s*Br'),
-
             ('AMD',     fr'{self.number}\s*(?:драм(?:ов|а|))\b'),
             ('CNY',     fr'{self.number}\s*(?:юан(?:ей|я|ь)|cny|CNY)\b'),
             ('GEL',     fr'{self.number}\s*(?:лари|gel|GEL)\b'),
@@ -68,7 +67,11 @@ class CurrencyParser:
             ('KZT',     fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
             ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
             ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
-            ('RON',     fr'{self.number}\s*(?:лей|лея|lei|ron|RON)\b'),
+            ('RON',     fr'{self.number}\s*(?:румынск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев)|leu|RON)\b'),
+            ('MDL',     fr'{self.number}\s*(?:молдавск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев)|mdl|MDL)\b'),
+
+            ('VND',     fr'{self.number}\s*(?:донг(?:ов|а|)|vnd|VND|₫|dd)\b'),
+            ('VND',     fr'{self.number}\s*₫'),
         ]
         
         self.compiled_patterns = [
