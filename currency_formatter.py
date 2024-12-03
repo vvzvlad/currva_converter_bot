@@ -135,7 +135,7 @@ class CurrencyFormatter:
         if not currency_list:
             return None 
             
-        # Дедупликация по сумме и валюте
+        # Deduplication by amount and currency
         seen = set()
         unique_conversions = []
         for amount, curr, original in currency_list:
@@ -144,10 +144,17 @@ class CurrencyFormatter:
                 seen.add(key)
                 unique_conversions.append((amount, curr, original))
                 
+        # Limit number of conversions to 10
+        if len(unique_conversions) > 10:
+            unique_conversions = unique_conversions[:10]
+            
         conversions = []
         for amount, curr, original in unique_conversions:
             conversion = self.format_conversion((amount, curr, original), rates, mode=mode, user_currencies=user_currencies)
             if conversion:
                 conversions.append(conversion)
+                
+        if len(currency_list) > 10:
+            conversions.append("... и остальные (сами считайте)")
                 
         return "\n".join(conversions)
