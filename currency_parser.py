@@ -54,6 +54,9 @@ class CurrencyParser:
             ('CZK',     fr'{self.number}\s*(?:крон(?:а|ы|)|чешск(?:ая|ой|их|ую) крон(?:а|ы|)|czk|CZK|Kč|Kč)\b'),
             ('CZK',     fr'{self.number}\s*Kč'),
 
+            ('UAH',     fr'{self.number}\s*(?:гривн(?:а|ы|)|гривен|грн|uah|UAH|₴)\b'),
+            ('UAH',     fr'{self.number}\s*₴'),
+
             ('AMD',     fr'{self.number}\s*(?:драм(?:ов|а|))\b'),
             ('CNY',     fr'{self.number}\s*(?:юан(?:ей|я|ь)|cny|CNY)\b'),
             ('GEL',     fr'{self.number}\s*(?:лари|gel|GEL)\b'),
