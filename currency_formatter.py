@@ -44,7 +44,7 @@ class CurrencyFormatter:
         """Format amount with currency symbol and flag"""
         flag, symbol = self.currency_formats[currency]
         
-        # Rounding: to whole numbers if greater than 20, otherwise to tenths
+        # Rounding: to whole numbers if greater than 20, otherwise to 2 decimal places
         if amount > 20:
             amount_int = int(amount.quantize(Decimal('1.'), rounding=ROUND_HALF_UP))
             # Format numbers greater than 10000 with spaces between thousands
@@ -53,10 +53,25 @@ class CurrencyFormatter:
             else:
                 formatted = str(amount_int)
         else:
-            # Round to 1 decimal place
-            rounded = amount.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
-            # Convert to string and remove trailing '.0' if present
-            formatted = str(rounded).rstrip('0').rstrip('.')
+            # Round to 2 decimal places
+            rounded = amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            
+            if rounded == 0:
+                formatted = "0"
+            else:
+                # Check if it's a whole number
+                if rounded == rounded.quantize(Decimal('1.'), rounding=ROUND_HALF_UP):
+                    formatted = str(int(rounded))
+                else:
+                    # Get decimal part
+                    decimal_str = str(rounded).split('.')[1] if '.' in str(rounded) else '00'
+                    
+                    # If tenths digit is 0, show 2 decimal places
+                    if decimal_str[0] == '0':
+                        formatted = f"{rounded:.2f}"
+                    else:
+                        # Otherwise show just 1 decimal place
+                        formatted = f"{rounded:.1f}".rstrip('0').rstrip('.')
         
         # For USD, EUR and GBP, place the currency symbol before the number
         if currency in self.symbol_before_number:
