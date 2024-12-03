@@ -294,7 +294,7 @@ def handle_message(message):
         if is_chat and message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
             if any(phrase in message.text.lower() for phrase in ignore_phrases):
                 user_settings_manager.set_chat_disabled(message.chat.id, ignore_duration)
-                bot.reply_to(message, "Ну и конвертируйте сами теперь")
+                bot.reply_to(message, "Ну и конвертируйте сами теперь!!")
                 return
             
         found_currencies = currency_parser.find_currencies(message.text)
