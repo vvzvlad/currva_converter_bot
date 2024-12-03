@@ -270,7 +270,12 @@ def handle_inline_query(query):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     try:
-        if message.forward_from or message.via_bot: 
+        # pass messages from bots
+        if message.via_bot:
+            return
+            
+        # pass forwarded messages only in group chats
+        if message.forward_from and message.chat.type in ['group', 'supergroup']:
             return
             
         if message.date < START_TIME - MAX_TIME_DELTA:
