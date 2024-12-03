@@ -67,10 +67,13 @@ class CurrencyParser:
             ('KZT',     fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
             ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
             ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
-            ('RON',     fr'{self.number}\s*(?:румынск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев)|leu|RON)\b'),
-            ('RON',     fr'{self.number}\s*(?:рон(?:ов|а|))\b'),
+
+            ('MDL',     fr'{self.number}\s*(?:ле(?:й|я|и)|mdl|MDL)\b'),
             ('MDL',     fr'{self.number}\s*(?:молдавск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев)|mdl|MDL)\b'),
 
+            ('RON',     fr'{self.number}\s*(?:румынск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев)|leu|RON)\b'),
+            ('RON',     fr'{self.number}\s*(?:рон(?:ов|а|))\b'),
+            
             ('VND',     fr'{self.number}\s*(?:донг(?:ов|а|)|vnd|VND|₫|dd)\b'),
             ('VND',     fr'{self.number}\s*₫'),
         ]
