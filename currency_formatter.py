@@ -33,6 +33,7 @@ class CurrencyFormatter:
             'CZK': ('🇨🇿', 'Kč'),
             'UAH': ('🇺🇦', '₴'),
             'BYN': ('🇧🇾', 'Br'),
+            'RON': ('🇷🇴', 'lei'),
         }
         self.target_currencies = list(self.currency_formats.keys())
         # Currencies to display in the message
