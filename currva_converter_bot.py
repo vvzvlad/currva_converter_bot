@@ -13,6 +13,7 @@ import logging
 import os
 import signal
 import sys
+import re
 import time
 import traceback
 import telebot
@@ -63,12 +64,11 @@ user_settings_manager = UserSettingsManager()
 bot.set_my_commands([
     types.BotCommand("start", "Запустить бота"),
     types.BotCommand("help", "Показать помощь"),
-    #types.BotCommand("stats", "Показать статистику (только для админа)"),
     types.BotCommand("currencies", "Настроить отображаемые валюты")
 ])
 
 START_TIME = time.time()
-MAX_TIME_DELTA = 10 #time delta to skip old messages in group chats
+MAX_TIME_DELTA = 10     #time delta in seconds to skip old messages in group chats
 
 
 @bot.message_handler(commands=['start', 'help'])
@@ -259,7 +259,27 @@ def handle_inline_query(query):
                 )
             )
         ]
-        bot.answer_inline_query(query.id, results)
+        try:
+            bot.answer_inline_query(query.id, results)
+        except (telebot.apihelper.ApiTelegramException, telebot.apihelper.ApiHTTPException) as e:
+            error_code = getattr(e, 'error_code', None)
+            if isinstance(e, telebot.apihelper.ApiHTTPException):
+                match = re.search(r'HTTP (\d+)', str(e)) # Extract error code from HTTP error message using regex
+                error_code = int(match.group(1)) if match else None
+                
+            if error_code in [400, 431, 414]:  # Message too long errors
+                error_results = [
+                    types.InlineQueryResultArticle(
+                        id='1',
+                        title='Ошибка',
+                        description='Слишком большое сообщение',
+                        input_message_content=types.InputTextMessageContent( message_text='Слишком большое сообщение' )
+                    )
+                ]
+                bot.answer_inline_query(query.id, error_results)
+            else:
+                raise
+            
         logger.info(f"Processed inline query '{query.query}'")
         statistics_manager.log_request(user=query.from_user, chat_id=None, chat_title=None, is_inline=True)
 
@@ -323,10 +343,16 @@ def handle_message(message):
             mode='chat',
             user_currencies=user_currencies
         )
-        if response: 
+        if response:
             logger.info(f"Processed message '{message.text}' in chat '{message.chat.title}'")
-            bot.reply_to(message, response)
             statistics_manager.log_request(user=message.from_user, chat_id=message.chat.id, chat_title=message.chat.title)
+            try:
+                bot.reply_to(message, response)
+            except telebot.apihelper.ApiTelegramException as e:
+                if e.error_code == 431:  # Request Header Fields Too Large
+                    bot.reply_to(message, "Слишком большое сообщение")
+                else:
+                    raise
 
     except Exception as e:
         logger.error(f"Error processing message '{message.text}': {str(e)}")
