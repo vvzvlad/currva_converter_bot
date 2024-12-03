@@ -23,10 +23,6 @@ class StatisticsManager:
         self._lock = threading.Lock()
         self._db = pickledb.load(db_file, auto_dump=True)
         
-        # Statistics settings
-        self.TOP_USERS_COUNT = 25
-        self.TOP_CHATS_COUNT = 10
-        
         # Initialize InfluxDB attributes
         self._influx_configured = False
         self._influx_params = None
