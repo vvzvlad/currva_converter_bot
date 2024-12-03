@@ -270,28 +270,29 @@ def handle_inline_query(query):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     try:
-        # pass messages from bots
+        is_group_chat = message.chat.type in ['group', 'supergroup']
+        is_reply_message = message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id
+
+        # skip messages from bots 
         if message.via_bot:
             return
             
-        # pass forwarded messages only in group chats
-        if message.forward_from and message.chat.type in ['group', 'supergroup']:
+        # skip forwarded messages only in group chats
+        if message.forward_from and is_group_chat:
             return
             
         if message.date < START_TIME - MAX_TIME_DELTA:
             logger.debug(f"Skipping old message from {message.date}, bot start time: {START_TIME}")
             return
 
-        is_chat = message.chat.type in ['group', 'supergroup']
-
         # Check if chat is disabled
-        if is_chat and user_settings_manager.is_chat_disabled(message.chat.id):
+        if is_group_chat and user_settings_manager.is_chat_disabled(message.chat.id):
             return
         
         # Check for ignore trigger phrases in group chats
         ignore_phrases = ["нахуй", "заткнись", "отключись"]
-        ignore_duration = 5 * 60  # 5 minutes in seconds
-        if is_chat and message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
+        ignore_duration = 5 * 60  # 5 minutes 
+        if is_group_chat and is_reply_message:
             if any(phrase in message.text.lower() for phrase in ignore_phrases):
                 user_settings_manager.set_chat_disabled(message.chat.id, ignore_duration)
                 bot.reply_to(message, "Ну и конвертируйте сами теперь!!")
@@ -300,12 +301,12 @@ def handle_message(message):
         found_currencies = currency_parser.find_currencies(message.text)
         
         if not found_currencies:
-            if not is_chat:
+            if not is_group_chat:
                 bot.reply_to(message, "Не нашел ничего, что можно конвертировать в другую валюту ¯\\_(ツ)_/¯")
             return  
 
-        entity_id = message.chat.id if is_chat else message.from_user.id
-        user_currencies = user_settings_manager.get_currencies(entity_id, is_chat)
+        entity_id = message.chat.id if is_group_chat else message.from_user.id
+        user_currencies = user_settings_manager.get_currencies(entity_id, is_group_chat)
         
         rates = {}
         for _amount, curr, _ in found_currencies:
@@ -323,8 +324,8 @@ def handle_message(message):
             user_currencies=user_currencies
         )
         if response: 
-            bot.reply_to(message, response)
             logger.info(f"Processed message '{message.text}' in chat '{message.chat.title}'")
+            bot.reply_to(message, response)
             statistics_manager.log_request(user=message.from_user, chat_id=message.chat.id, chat_title=message.chat.title)
 
     except Exception as e:
