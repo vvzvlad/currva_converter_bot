@@ -292,6 +292,7 @@ def handle_message(message):
     try:
         is_group_chat = message.chat.type in ['group', 'supergroup']
         is_reply_message = message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id
+        is_chat_disabled = user_settings_manager.is_chat_disabled(message.chat.id)
 
         # skip messages from bots 
         if message.via_bot:
@@ -306,7 +307,7 @@ def handle_message(message):
             return
 
         # Check if chat is disabled
-        if is_group_chat and user_settings_manager.is_chat_disabled(message.chat.id):
+        if is_group_chat and is_chat_disabled and not is_reply_message:
             return
         
         # Check for ignore trigger phrases in group chats

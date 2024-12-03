@@ -68,6 +68,7 @@ class CurrencyParser:
             ('KZT',     fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
             ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
             ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
+            
         ]
         
         self.compiled_patterns = [
