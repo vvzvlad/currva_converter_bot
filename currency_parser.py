@@ -76,6 +76,13 @@ class CurrencyParser:
             
             ('VND',     fr'{self.number}\s*(?:донг(?:ов|а|)|vnd|VND|₫|dd)\b'),
             ('VND',     fr'{self.number}\s*₫'),
+
+            ('BGN',     fr'{self.number}\s*(?:лев(?:ов|а|)|болгарск(?:их|ого|ий) лев(?:ов|а|)|bgn|BGN|лв)\b'),
+            ('BGN',     fr'{self.number}\s*лв'),
+
+            ('AED',     fr'{self.number}\s*(?:дирхам(?:ов|а|)|aed|AED|د.إ|dh)\b'),
+            ('AED',     fr'{self.number}\s*د.إ'),
+            ('AED',     fr'{self.number}\s*dh')
         ]
         
         self.compiled_patterns = [

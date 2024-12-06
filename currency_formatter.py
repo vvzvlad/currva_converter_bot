@@ -36,6 +36,8 @@ class CurrencyFormatter:
             'RON': ('🇷🇴', 'lei'),
             'MDL': ('🇲🇩', 'lei'),
             'VND': ('🇻🇳', '₫'),
+            'BGN': ('🇧🇬', 'лв'),
+            'AED': ('🇦🇪', 'dh'),
         }
         self.target_currencies = list(self.currency_formats.keys())
         # Currencies to display in the message

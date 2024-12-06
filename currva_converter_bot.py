@@ -67,7 +67,7 @@ bot.set_my_commands([
     types.BotCommand("currencies", "Настроить отображаемые валюты")
 ])
 
-START_TIME = time.time()
+START_TIME = time.time()currva_converter_bot.py
 MAX_TIME_DELTA = 10     #time delta in seconds to skip old messages in group chats
 
 
