@@ -29,10 +29,11 @@ from user_settings_manager import UserSettingsManager
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
+
 OBSERVER = None
 
 bot_token = os.getenv('BOT_TOKEN')

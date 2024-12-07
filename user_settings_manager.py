@@ -6,10 +6,18 @@
 from typing import List, Optional
 import logging
 from pathlib import Path
-import pickledb
 import time
+import os
 
-logger = logging.getLogger(__name__)
+import pickledb
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
+
 
 class UserSettingsManager:
     def __init__(self, db_file: str = 'data/user_settings.json'):

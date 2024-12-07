@@ -14,7 +14,13 @@ from pathlib import Path
 
 import requests
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
+
 
 UPDATES_INTERVAL = 12 * 60 * 60  # 12 hours
 class ExchangeRatesManager:

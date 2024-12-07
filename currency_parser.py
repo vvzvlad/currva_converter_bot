@@ -5,6 +5,15 @@
 
 import re
 from typing import List, Tuple
+import logging
+import os
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 
 class CurrencyParser:
     def __init__(self):

@@ -6,8 +6,14 @@
 from typing import List, Tuple, Dict, Optional
 from decimal import Decimal, ROUND_HALF_UP
 import logging
+import os
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 
-logger = logging.getLogger(__name__)
 
 
 class CurrencyFormatter:
