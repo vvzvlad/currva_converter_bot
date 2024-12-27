@@ -288,8 +288,22 @@ def handle_inline_query(query):
         logger.error(f"Error processing inline query '{query.query}': {str(e)}")
         traceback.print_exc()
 
+
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    if message.caption:
+        return parse_text(message.caption, message)
+    else:
+        return None
+
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
+    if message.photo:
+        return parse_text(message.caption, message)
+    else:
+        return parse_text(message.text, message)
+
+def parse_text(text, message):
     try:
         is_group_chat = message.chat.type in ['group', 'supergroup']
         is_reply_message = message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id
@@ -320,7 +334,7 @@ def handle_message(message):
                 bot.reply_to(message, "Ну и конвертируйте сами теперь!!")
                 return
             
-        found_currencies = currency_parser.find_currencies(message.text)
+        found_currencies = currency_parser.find_currencies(text)
         
         if not found_currencies:
             if not is_group_chat:
