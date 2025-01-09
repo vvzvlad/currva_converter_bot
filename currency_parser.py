@@ -25,7 +25,7 @@ class CurrencyParser:
             ('ILS',     fr'{self.number}\s*₪'),
     
             ('GBP',     fr'(?:£){self.number}\b'),
-            ('GBP',     fr'{self.number}\s*(?:фунт(?:ов|а|)|паунд(?:ов|а|)|pound|gbp|GBP|gbr|GBR|£)\b'),
+            ('GBP',     fr'{self.number}\s*(?:фунт(?:ов|а|)|паунд(?:ов|а|)|квид(?:ов|а|)|pound|quid|gbp|GBP|gbr|GBR|£)\b'),
             ('GBP',     fr'{self.number}\s*£'),
     
             ('RUB',     fr'{self.number}\s*(?:руб(?:лей|ля|ль)|₽|rub|RUB)\b'),
