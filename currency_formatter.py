@@ -94,7 +94,7 @@ class CurrencyFormatter:
         amount, currency, original = currency_data
         
         if mode == 'chat':
-            if amount == 0: return "Нахуй пошел"            
+            if amount == 0: return "Нахуй иди"            
             if amount == 0.5 and currency == 'USD': return "In Da Club!"
     
         # Check if user has only the source currency in settings
