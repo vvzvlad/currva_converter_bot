@@ -3,7 +3,6 @@
 # pylance: disable=reportMissingImports, reportMissingModuleSource, reportGeneralTypeIssues
 # type: ignore
 
-#TODO а приникь на "нахуй пошел" он будет игнорить чат какое-то время
 #TODO Ещё интересный момент: как детектить валюту какой страны имел в виду автор? Я например сейчас под песо подразумеваю филиппинские, а кто-то может в Мексике быть
 #TODO дать возможность добавлять произвольные валюты
 #TODO https://github.com/FlongyDev/py-rpn калькулятор
