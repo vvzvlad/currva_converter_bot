@@ -232,7 +232,8 @@ class CurrencyFormatter:
     def format_conversion(self, currency_data: Tuple[float, str, str], rates: Dict[str, float], mode: str, user_currencies: Optional[List[str]] = None) -> str:
         """Format currency conversion result into message"""
         amount, currency_code, original = currency_data
-        
+        currency = self.currency_formats[currency_code]
+
         if mode == 'chat':
             if amount == 0: return "Нахуй иди"            
             if amount == 0.5 and currency_code == 'USD': return "In Da Club!"
@@ -240,8 +241,8 @@ class CurrencyFormatter:
         # Check if user has only the source currency in settings
         target_currencies = user_currencies if user_currencies else self.default_currencies
         if len(target_currencies) == 1 and target_currencies[0] == currency_code:
-            return f"{original} (🇷🇺): других валют для конвертации не установлено. Используйте /currencies"
-        
+            return f"{original} ({currency.flag}): других валют для конвертации не установлено. Используйте /currencies"
+
         if mode == 'chat':
             usd_amount = amount # if currency is USD 
             if currency_code != 'USD':
@@ -253,7 +254,6 @@ class CurrencyFormatter:
         
         # Initialize message based on mode
         if mode == 'chat':
-            currency = self.currency_formats[currency_code]
             message = f"{original} ({currency.flag}) это"
         elif mode == 'inline':
             message = f"{original}"
