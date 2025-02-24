@@ -546,8 +546,8 @@ class TestCurrencyFormatting(unittest.TestCase):
         self.formatter = CurrencyFormatter()
         self.rates_manager = StubExchangeRatesManager()
         self.rates = {}
-        for curr in self.formatter.target_currencies:
-            for target in self.formatter.target_currencies:
+        for curr in self.formatter.currency_formats.keys():
+            for target in self.formatter.currency_formats.keys():
                 if curr != target:
                     self.rates[f"{curr}_{target}"] = self.rates_manager.get_rate(curr, target)
 
