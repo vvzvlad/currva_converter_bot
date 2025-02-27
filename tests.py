@@ -4,6 +4,9 @@
 # type: ignore
 
 import unittest
+
+from currencies import CURRENCIES
+from currency_formatter import CurrencyFormatter
 from currency_parser import CurrencyParser
 
 class TestCurrencyParser(CurrencyParser):
@@ -646,12 +649,11 @@ class TestCurrencyParsing(unittest.TestCase):
         # Тест из примера
         test("https://open.spotify.com/track/3cfgisz6DhZmooQk08P4Eu", [])
 
-from currency_formatter import CurrencyFormatter
-
 class StubExchangeRatesManager:
     def get_rate(self, from_currency, to_currency):
         # Возвращаем фиксированный курс для тестирования
         return 1.0  # Курс 1 для упрощения тестов
+
 
 class TestCurrencyFormatting(unittest.TestCase):
     def setUp(self):
@@ -659,8 +661,8 @@ class TestCurrencyFormatting(unittest.TestCase):
         self.formatter = CurrencyFormatter()
         self.rates_manager = StubExchangeRatesManager()
         self.rates = {}
-        for curr in self.formatter.currency_formats.keys():
-            for target in self.formatter.currency_formats.keys():
+        for curr in CURRENCIES.keys():
+            for target in CURRENCIES.keys():
                 if curr != target:
                     self.rates[f"{curr}_{target}"] = self.rates_manager.get_rate(curr, target)
 
