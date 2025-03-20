@@ -51,6 +51,10 @@ class CurrencyParser:
             ('JPY',     fr'{self.number}\s*(?:йен(?:а|ы|)|¥|jpy|JPY)\b'),
             ('JPY',     fr'{self.number}\s*¥'),
 
+            ('KRW',     fr'{self.number}\s*(?:вон(?:а|ы|)|krw|KRW|₩)\b'),
+            ('KRW',     fr'{self.number}\s*₩'),
+            ('KRW',     fr'₩{self.number}\b'),
+
             ('PLN',     fr'{self.number}\s*(?:злот(?:ый|ых|ого|ые)|pln|PLN|zł)\b'),
             ('PLN',     fr'{self.number}\s*zł'),
 
