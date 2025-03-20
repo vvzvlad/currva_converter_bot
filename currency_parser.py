@@ -144,22 +144,40 @@ class CurrencyParser:
         # 1,000.50 or 1.000,50 or 1000,50 or 1000.50
         if clean_amount.count('.') > 1 or clean_amount.count(',') > 1:
             # Handle formats like 1,000,000 or 1.000.000
-            clean_amount = clean_amount.replace(',', '').replace('.', '')
+            if ',' in clean_amount and clean_amount.count(',') > 1:
+                # For formats like 1,000,000
+                clean_amount = clean_amount.replace(',', '')
+            elif '.' in clean_amount and clean_amount.count('.') > 1:
+                # For formats like 1.000.000
+                clean_amount = clean_amount.replace('.', '')
             amount = float(clean_amount)
         else:
-            if ',' in clean_amount and '.' in clean_amount: # If both separators present, last one is decimal
+            if ',' in clean_amount and '.' in clean_amount: 
+                # If both separators present, last one is decimal
                 if clean_amount.rindex(',') > clean_amount.rindex('.'):
                     clean_amount = clean_amount.replace('.', '').replace(',', '.')
                 else:
                     clean_amount = clean_amount.replace(',', '')
-            elif ',' in clean_amount: # Check if comma is decimal separator
+            elif ',' in clean_amount: 
+                # Check if comma is decimal separator
                 parts = clean_amount.split(',')
-                if len(parts[1]) <= 2:  # Assume decimal if 2 or fewer digits after comma
-                    clean_amount = clean_amount.replace(',', '.')
+                if len(parts) == 2:
+                    # Проверяем, является ли запятая десятичным разделителем
+                    # Если число начинается с 0, и после запятой идут цифры, это десятичная дробь
+                    if clean_amount.startswith('0,') or len(parts[1]) <= 2:
+                        clean_amount = clean_amount.replace(',', '.')
+                    else:
+                        # Assume thousands separator
+                        clean_amount = clean_amount.replace(',', '')
                 else:
+                    # Assume thousands separator
                     clean_amount = clean_amount.replace(',', '')
             
-            amount = float(clean_amount)
+            try:
+                amount = float(clean_amount)
+            except ValueError:
+                logger.error(f"Failed to convert '{clean_amount}' to float from original '{amount_str}'")
+                amount = 0.0
             
         return amount * multiplier, base_currency
 
