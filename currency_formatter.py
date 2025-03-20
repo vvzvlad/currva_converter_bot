@@ -189,6 +189,7 @@ class CurrencyFormatter:
 
         # Default currencies to display in the message
         self.default_currencies = ['RUB', 'USD', 'ILS', 'EUR', 'GBP', "JPY", "AMD"]
+        self.target_currencies = list(self.currency_formats.keys())
 
     def _format_amount(self, amount: Decimal, currency_code: str) -> str:
         """Format amount with currency symbol and flag"""
