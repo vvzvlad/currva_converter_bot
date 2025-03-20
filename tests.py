@@ -37,7 +37,9 @@ class TestCurrencyParsing(unittest.TestCase):
         test("200 фунт", [(200.0, "GBP", "200 фунт")])
         test("300 фунтов", [(300.0, "GBP", "300 фунтов")])
         test("400 паунд", [(400.0, "GBP", "400 паунд")])
+        test("500 квидов", [(500.0, "GBP", "500 квидов")])
         test("500 pound", [(500.0, "GBP", "500 pound")])
+        test("500 quid", [(500.0, "GBP", "500 quid")])
         test("600 gbp", [(600.0, "GBP", "600 gbp")])
         test("700£", [(700.0, "GBP", "700£")])
         test("£800", [(800.0, "GBP", "£800")])
@@ -76,7 +78,6 @@ class TestCurrencyParsing(unittest.TestCase):
         test("300 доллара", [(300.0, "USD", "300 доллара")])
         test("400 баксов", [(400.0, "USD", "400 баксов")])
         test("500 бакс", [(500.0, "USD", "500 бакс")])
-        test("500 квидов", [(500.0, "USD", "500 квидов")])
         test("600 usd", [(600.0, "USD", "600 usd")])
         test("700$", [(700.0, "USD", "700$")])
         test("$800", [(800.0, "USD", "$800")])
@@ -545,8 +546,8 @@ class TestCurrencyFormatting(unittest.TestCase):
         self.formatter = CurrencyFormatter()
         self.rates_manager = StubExchangeRatesManager()
         self.rates = {}
-        for curr in self.formatter.target_currencies:
-            for target in self.formatter.target_currencies:
+        for curr in self.formatter.currency_formats.keys():
+            for target in self.formatter.currency_formats.keys():
                 if curr != target:
                     self.rates[f"{curr}_{target}"] = self.rates_manager.get_rate(curr, target)
 
