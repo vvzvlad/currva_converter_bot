@@ -173,9 +173,25 @@ class CurrencyParser:
         # Find all matches first
         for currency, pattern in self.compiled_patterns:
             for match in pattern.finditer(text):
-                self.current_match = match.group(0)
-                amount, base_currency = self._convert_amount(match.group('amount'), currency)
-                matches.append(( match.start(), match.end(), amount, base_currency, self.current_match ))
+                # Check that currency is surrounded by spaces or is at the beginning/end of text
+                start_pos = match.start()
+                end_pos = match.end()
+                
+                # Start validation: either it's the beginning of text or preceded by space or non-alphanumeric
+                valid_start = start_pos == 0 or text[start_pos-1].isspace() or not text[start_pos-1].isalnum()
+                
+                # End validation: either it's the end of text or followed by space or non-alphanumeric
+                valid_end = end_pos == len(text) or text[end_pos].isspace() or not text[end_pos].isalnum()
+                
+                # Additional check for special characters that should not be considered as separators
+                special_chars = "#@^e%"
+                if start_pos > 0 and text[start_pos-1] in special_chars:
+                    valid_start = False
+                
+                if valid_start and valid_end:
+                    self.current_match = match.group(0)
+                    amount, base_currency = self._convert_amount(match.group('amount'), currency)
+                    matches.append(( start_pos, end_pos, amount, base_currency, self.current_match ))
         
         # Sort matches by start position
         matches.sort(key=lambda x: x[0])
