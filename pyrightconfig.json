@@ -1,5 +1,4 @@
 {
-  "exclude": ["bot_old.py"],
   "reportMissingImports": false,
   "reportMissingModuleSource": false
 }
