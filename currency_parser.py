@@ -8,6 +8,8 @@ from typing import List, Tuple
 import logging
 import os
 
+from currencies import CURRENCIES
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -21,83 +23,88 @@ class CurrencyParser:
         self.current_match = ''
 
         self.patterns = [
-            ('ILS',     fr'{self.number}\s*(?:шекел(?:ей|я|ь)|шек|шах|ils|ILS|₪)\b'),
+            (currency.code, fr'{self.number}\s*(?:{currency.code})\b')
+            for currency in CURRENCIES.values()
+        ]
+
+        self.patterns += [
+            ('ILS',     fr'{self.number}\s*(?:шекел(?:ей|я|ь)|шек|шах|₪)\b'),
             ('ILS',     fr'{self.number}\s*₪'),
     
             ('GBP',     fr'(?:£){self.number}\b'),
-            ('GBP',     fr'{self.number}\s*(?:фунт(?:ов|а|)|паунд(?:ов|а|)|квид(?:ов|а|)|pound|quid|gbp|GBP|gbr|GBR|£)\b'),
+            ('GBP',     fr'{self.number}\s*(?:фунт(?:ов|а|)|паунд(?:ов|а|)|квид(?:ов|а|)|pound|quid|gbr|GBR|£)\b'),
             ('GBP',     fr'{self.number}\s*£'),
     
-            ('RUB',     fr'{self.number}\s*(?:руб(?:лей|ля|ль)|₽|rub|RUB)\b'),
+            ('RUB',     fr'{self.number}\s*(?:руб(?:лей|ля|ль)|₽)\b'),
             ('RUB',     fr'{self.number}\s*₽'),
             ('RUBK',     fr'{self.number}\s*(?:килоруб(?:лей|ля|ль))\b'),
             ('RUBK',     r'(?P<amount>)килоруб(?:лей|ля|ль)\b'),
                 
             ('USD',     fr'\${self.number}\b'),
-            ('USD',     fr'{self.number}\s*(?:доллар(?:ов|а|)|бакс(?:ов|а|)|usd|USD|\$)\b'),
+            ('USD',     fr'{self.number}\s*(?:доллар(?:ов|а|)|бакс(?:ов|а|)|\$)\b'),
             ('USD',     fr'{self.number}\s*\$'),
             ('USDCENT', fr'{self.number}\s*(?:цент(?:ов|а|)|cent|cents)\b'),
             ('USDK',     fr'{self.number}\s*(?:килобакс(?:ов|а|))\b'),
             ('USDK',     r'(?P<amount>)килобакс(?:ов|а|)\b'),
 
             ('EUR',     fr'€{self.number}\b'),
-            ('EUR',     fr'{self.number}\s*(?:евро|eur|EUR|€)\b'),
+            ('EUR',     fr'{self.number}\s*(?:евро|€)\b'),
             ('EUR',     fr'{self.number}\s*€'),
             ('EURCENT', fr'{self.number}\s*(?:евроцент(?:ов|а|)|eurocent|eurocents)\b'),
             ('EURK',     fr'{self.number}\s*(?:килоевро|eurk|EURK)\b'),
             ('EURK',     r'(?P<amount>)килоевро(?:ов|а|)\b'),
 
             ('JPY',     fr'¥{self.number}\b'),
-            ('JPY',     fr'{self.number}\s*(?:йен(?:а|ы|)|¥|jpy|JPY)\b'),
+            ('JPY',     fr'{self.number}\s*(?:йен(?:а|ы|)|¥)\b'),
             ('JPY',     fr'{self.number}\s*¥'),
 
-            ('KRW',     fr'{self.number}\s*(?:вон(?:а|ы|)|krw|KRW|₩)\b'),
+            ('KRW',     fr'{self.number}\s*(?:вон(?:а|ы|)|₩)\b'),
             ('KRW',     fr'{self.number}\s*₩'),
             ('KRW',     fr'₩{self.number}\b'),
 
-            ('PLN',     fr'{self.number}\s*(?:злот(?:ый|ых|ого|ые)|pln|PLN|zł)\b'),
+            ('PLN',     fr'{self.number}\s*(?:злот(?:ый|ых|ого|ые)|zł)\b'),
             ('PLN',     fr'{self.number}\s*zł'),
 
-            ('TRY',     fr'{self.number}\s*(?:лир(?:а|ы|)|турецк(?:ая|ой|их|ую) лир(?:а|ы|)|try|TRY|₺|₤)\b'),
+            ('TRY',     fr'{self.number}\s*(?:лир(?:а|ы|)|турецк(?:ая|ой|их|ую) лир(?:а|ы|)|₺|₤)\b'),
             ('TRY',     fr'{self.number}\s*₺'),
             ('TRY',     fr'{self.number}\s*₤'),
             ('TRY',     fr'₤{self.number}\b'),
             ('TRY',     fr'₺{self.number}\b'),
 
-            ('CZK',     fr'{self.number}\s*(?:крон(?:а|ы|)|чешск(?:ая|ой|их|ую) крон(?:а|ы|)|czk|CZK|Kč|Kč)\b'),
+            ('CZK',     fr'{self.number}\s*(?:крон(?:а|ы|)|чешск(?:ая|ой|их|ую) крон(?:а|ы|)|Kč|Kč)\b'),
             ('CZK',     fr'{self.number}\s*Kč'),
 
-            ('UAH',     fr'{self.number}\s*(?:гривн(?:а|ы|)|гривен|грн|uah|UAH|₴)\b'),
+            ('UAH',     fr'{self.number}\s*(?:гривн(?:а|ы|)|гривен|грн|₴)\b'),
             ('UAH',     fr'{self.number}\s*₴'),
 
-            ('BYN',     fr'{self.number}\s*(?:белорусск(?:их|ого|ий|ие) руб(?:лей|ля|ль)|беларуск(?:их|ого|ий|ие) руб(?:лей|ля|ль)|byn|BYN|Br)\b'),
+            ('BYN',     fr'{self.number}\s*(?:белорусск(?:их|ого|ий|ие) руб(?:лей|ля|ль)|беларуск(?:их|ого|ий|ие) руб(?:лей|ля|ль)|Br)\b'),
             ('BYN',     fr'{self.number}\s*Br'),
             ('AMD',     fr'{self.number}\s*(?:драм(?:ов|а|))\b'),
-            ('CNY',     fr'{self.number}\s*(?:юан(?:ей|я|ь)|cny|CNY)\b'),
-            ('GEL',     fr'{self.number}\s*(?:лари|gel|GEL)\b'),
-            ('RSD',     fr'{self.number}\s*(?:динар(?:ов|а|)|rsd|RSD)\b'),
-            ('THB',     fr'{self.number}\s*(?:бат(?:ов|а|)|thb|THB)\b'),
-            ('KZT',     fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
-            ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
-            ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
+            ('CNY',     fr'{self.number}\s*(?:юан(?:ей|я|ь))\b'),
+            ('GEL',     fr'{self.number}\s*(?:лари)\b'),
+            ('RSD',     fr'{self.number}\s*(?:динар(?:ов|а|))\b'),
+            ('THB',     fr'{self.number}\s*(?:бат(?:ов|а|))\b'),
+            ('KZT',     fr'{self.number}\s*(?:тенге|тг)\b'),
+            ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|))\b'),
+            ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо)\b'),
 
-            ('MDL',     fr'{self.number}\s*(?:ле(?:й|я|и)|mdl|MDL)\b'),
-            ('MDL',     fr'{self.number}\s*(?:молдавск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев)|mdl|MDL)\b'),
+            ('MDL',     fr'{self.number}\s*(?:ле(?:й|я|и))\b'),
+            ('MDL',     fr'{self.number}\s*(?:молдавск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев))\b'),
 
-            ('RON',     fr'{self.number}\s*(?:румынск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев)|leu|RON)\b'),
+            ('RON',     fr'{self.number}\s*(?:румынск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев)|leu)\b'),
             ('RON',     fr'{self.number}\s*(?:рон(?:ов|а|))\b'),
             
-            ('VND',     fr'{self.number}\s*(?:донг(?:ов|а|)|vnd|VND|₫|dd)\b'),
+            ('VND',     fr'{self.number}\s*(?:донг(?:ов|а|)|₫|dd)\b'),
             ('VND',     fr'{self.number}\s*₫'),
 
-            ('BGN',     fr'{self.number}\s*(?:лев(?:ов|а|)|болгарск(?:их|ого|ий) лев(?:ов|а|)|bgn|BGN|(?<!\w)лв(?!\w))\b'),
+            ('BGN',     fr'{self.number}\s*(?:лев(?:ов|а|)|болгарск(?:их|ого|ий) лев(?:ов|а|)|(?<!\w)лв(?!\w))\b'),
             ('BGN',     fr'{self.number}\s*(?<!\w)лв(?!\w)'),
 
-            ('AED',     fr'{self.number}\s*(?:дирхам(?:ов|а|)|aed|AED|د.إ|dh)\b'),
+            ('AED',     fr'{self.number}\s*(?:дирхам(?:ов|а|)|د.إ|dh)\b'),
             ('AED',     fr'{self.number}\s*د.إ'),
             ('AED',     fr'{self.number}\s*dh')
         ]
-        
+
         self.compiled_patterns = [
             (curr, re.compile(pattern, re.IGNORECASE)) 
             for curr, pattern in self.patterns

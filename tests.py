@@ -50,12 +50,11 @@ class TestCurrencyParsing(unittest.TestCase):
         test("£ 800", []) 
         test("1.2.3 доллара", [(2.3, 'USD', '2.3 доллара')]) 
         test("77 тугриков", [])
-        test("7666777 kwd", [])
+        test("7666777 kwd", [(7666777.0, 'KWD', '7666777 kwd')])
         test("100500 CAD вышло", [(100500.0, 'CAD', '100500 CAD')])
         test("два с половиной бакса", [])
         test("пять баксов", [])
         test("three hundred bucks", [])
-        
 
         test("100 рублей", [(100.0, "RUB", "100 рублей")])
         test("200 рубль", [(200.0, "RUB", "200 рубль")])
@@ -348,13 +347,10 @@ class TestCurrencyParsing(unittest.TestCase):
         test("2 د.إ", [(2.0, "AED", "2 د.إ")])
         test("5 د.إ", [(5.0, "AED", "5 د.إ")])
 
-
-
         test("0.2 ₫", [(0.2, "VND", "0.2 ₫")])
         test("0.2₫", [(0.2, "VND", "0.2₫")])
         test("0.2 донга", [(0.2, "VND", "0.2 донга")])
         test("0.2 недонгов", [])
-
 
         test("-5 рублей", [(5.0, "RUB", "5 рублей")])
         test("10 рублей + 20 фунтов", [(10.0, "RUB", "10 рублей"), (20.0, "GBP", "20 фунтов")])
@@ -409,9 +405,9 @@ class TestCurrencyParsing(unittest.TestCase):
         test("30 пхп", [])
         test("100500 кгам", [])
         test("1337 чего блядь", [])
-        test("5500 AMD", [])
+        test("5500 AMD", [(5500.0, "AMD", "5500 AMD")])
         test("1337 лари", [(1337.0, "GEL", "1337 лари")])
-        test("415 amd", [])
+        test("415 amd", [(415.0, "AMD", "415 amd")])
         test("300$", [(300.0, "USD", "300$")])
         test("10 юаней", [(10.0, "CNY", "10 юаней")])
         test("1 фунт", [(1.0, "GBP", "1 фунт")])
@@ -429,7 +425,6 @@ class TestCurrencyParsing(unittest.TestCase):
         test("50 нфс", [])
         test("50 агорот", [])
         test("50 огород", [])
-
 
         test("1 рубль", [(1.0, "RUB", "1 рубль")])
         test("1 лари 100 рублей 2 доллара", [(1.0, "GEL", "1 лари"), (100.0, "RUB", "100 рублей"), (2.0, "USD", "2 доллара")])
@@ -648,6 +643,11 @@ class TestCurrencyParsing(unittest.TestCase):
         
         # Тест из примера
         test("https://open.spotify.com/track/3cfgisz6DhZmooQk08P4Eu", [])
+        # Все заданные валюты должны парситься как минимум по коду
+        for curr in CURRENCIES.values():
+            test(f"1 {curr.code}", [(1.0, curr.code, f"1 {curr.code}")])
+            test(f"1 {curr.code.lower()}", [(1.0, curr.code, f"1 {curr.code.lower()}")])
+
 
 class StubExchangeRatesManager:
     def get_rate(self, from_currency, to_currency):
