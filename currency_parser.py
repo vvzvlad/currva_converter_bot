@@ -79,7 +79,7 @@ class CurrencyParser:
             ('THB',     fr'{self.number}\s*(?:бат(?:ов|а|)|thb|THB)\b'),
             ('KZT',     fr'{self.number}\s*(?:тенге|тг|kzt|KZT)\b'),
             ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
-            ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо|mxn|MXN)\b'),
+            ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий|ое) песо|mxn|MXN)\b'),
 
             ('MDL',     fr'{self.number}\s*(?:ле(?:й|я|и)|mdl|MDL)\b'),
             ('MDL',     fr'{self.number}\s*(?:молдавск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев)|mdl|MDL)\b'),
@@ -95,7 +95,11 @@ class CurrencyParser:
 
             ('AED',     fr'{self.number}\s*(?:дирхам(?:ов|а|)|aed|AED|د.إ|dh)\b'),
             ('AED',     fr'{self.number}\s*د.إ'),
-            ('AED',     fr'{self.number}\s*dh')
+            ('AED',     fr'{self.number}\s*dh'),
+
+            ('PHP',     fr'{self.number}\s*(?:филиппинск(?:их|ого|ий|ое) песо|piso|php|PHP|₱)\b'),
+            ('PHP',     fr'{self.number}\s*₱'),
+            ('PHP',     fr'₱{self.number}\b')
         ]
         
         self.compiled_patterns = [
