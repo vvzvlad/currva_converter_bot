@@ -589,6 +589,8 @@ class TestCurrencyParsing(unittest.TestCase):
         test("0.2 Br", [(0.2, "BYN", "0.2 Br")])
         test("0.2Br", [(0.2, "BYN", "0.2Br")])
 
+        test("1 макбук", [(1, "MACBOOK", "1 макбук")])
+
     def test_currency_boundary_detection(self):
         def test(text, expected):
             result = self.parser.find_currencies(text)

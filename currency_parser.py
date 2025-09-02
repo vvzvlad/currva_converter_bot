@@ -99,7 +99,9 @@ class CurrencyParser:
 
             ('PHP',     fr'{self.number}\s*(?:филиппинск(?:их|ого|ий|ое) песо|piso|php|PHP|₱)\b'),
             ('PHP',     fr'{self.number}\s*₱'),
-            ('PHP',     fr'₱{self.number}\b')
+            ('PHP',     fr'₱{self.number}\b'),
+
+            ('MACBOOK', fr'{self.number}\s*(?:макбук(?:ов|а))\b')
         ]
         
         self.compiled_patterns = [

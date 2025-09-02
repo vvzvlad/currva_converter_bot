@@ -111,7 +111,7 @@ class ExchangeRatesManager:
                 return
             
             # Get all currencies from API response
-            usd_rates = {'USD': 1.0}  # Add base USD currency
+            usd_rates = {'USD': 1.0, 'MACBOOK': 2500}  # Add base USD currency
             for key, value in result['quotes'].items():
                 currency = key[3:]  # Remove 'USD' prefix from key
                 usd_rates[currency] = value

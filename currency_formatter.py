@@ -185,6 +185,7 @@ class CurrencyFormatter:
             'VND': CurrencyFormat('VND', '₫'),
             'VUV': CurrencyFormat('VUV', 'VT'),
             'WST': CurrencyFormat('WST', '$'),
+            'MACBOOK': CurrencyFormat('MACBOOK', 'McBk', flag_override="🍏")
         }
 
         # Default currencies to display in the message
