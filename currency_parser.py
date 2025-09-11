@@ -81,6 +81,8 @@ class CurrencyParser:
             ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|)|cad|CAD)\b'),
             ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий|ое) песо|mxn|MXN)\b'),
 
+            ('ARS',     fr'{self.number}\s*(?:аргентинск(?:их|ого|ий|ое) песо|ars|ARS)\b'),
+
             ('MDL',     fr'{self.number}\s*(?:ле(?:й|я|и)|mdl|MDL)\b'),
             ('MDL',     fr'{self.number}\s*(?:молдавск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев)|mdl|MDL)\b'),
 
