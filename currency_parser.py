@@ -87,6 +87,7 @@ class CurrencyParser:
             ('KZT',     fr'{self.number}\s*(?:тенге|тг)\b'),
             ('CAD',     fr'{self.number}\s*(?:канадск(?:их|ого|ий) доллар(?:ов|а|))\b'),
             ('MXN',     fr'{self.number}\s*(?:песо|мексиканск(?:их|ого|ий) песо)\b'),
+            ('ARS',     fr'{self.number}\s*(?:аргентинск(?:их|ого|ий|ое) песо)\b'),
 
             ('MDL',     fr'{self.number}\s*(?:ле(?:й|я|и))\b'),
             ('MDL',     fr'{self.number}\s*(?:молдавск(?:их|ого|ий) ле(?:й|я|ев)|ле(?:й|я|ев))\b'),
@@ -102,7 +103,11 @@ class CurrencyParser:
 
             ('AED',     fr'{self.number}\s*(?:дирхам(?:ов|а|)|د.إ|dh)\b'),
             ('AED',     fr'{self.number}\s*د.إ'),
-            ('AED',     fr'{self.number}\s*dh')
+            ('AED',     fr'{self.number}\s*dh'),
+
+            ('PHP',     fr'{self.number}\s*(?:филиппинск(?:их|ого|ий|ое) песо|piso|php|PHP|₱)\b'),
+            ('PHP',     fr'{self.number}\s*₱'),
+            ('PHP',     fr'₱{self.number}\b')
         ]
 
         self.compiled_patterns = [
