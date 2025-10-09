@@ -101,7 +101,13 @@ class CurrencyParser:
 
             ('PHP',     fr'{self.number}\s*(?:филиппинск(?:их|ого|ий|ое) песо|piso|php|PHP|₱)\b'),
             ('PHP',     fr'{self.number}\s*₱'),
-            ('PHP',     fr'₱{self.number}\b')
+            ('PHP',     fr'₱{self.number}\b'),
+
+            # Tajikistani somoni
+            ('TJS',     fr'{self.number}\s*(?:сомони|tjs|TJS)\b'),
+
+            # Uzbekistani so'm (sum) and som (user requested mapping to UZS)
+            ('UZS',     fr'{self.number}\s*(?:сум(?:ов|а|)|сом(?:ов|а|)|uzs|UZS)\b')
         ]
         
         self.compiled_patterns = [
