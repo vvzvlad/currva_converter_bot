@@ -5,13 +5,14 @@ on:
   push:
     branches: [ "master", "develop" ]
 
-# Gitea 1.26 supports the `packages` scope in `permissions:`, so the built-in job token
-# is enough to push to the *Gitea* registry — no separate PAT secret is needed there.
-# ghcr.io is a different host and is not covered by this token: it still needs the
-# `GHCR_PAT` secret (see the `build` job).
+# Only `contents: read` is useful here. Gitea 1.26 accepts `packages: write` in this
+# block, but it does NOT make the built-in job token usable against Gitea's own container
+# registry — verified on run 560, where the login answered
+#   Get "https://gitea.vvzvlad.xyz/v2/": unauthorized
+# Both registries therefore authenticate with a PAT from the org secrets: `REGISTRY_TOKEN`
+# for gitea.vvzvlad.xyz and `GHCR_PAT` for ghcr.io (see the `build` job).
 permissions:
   contents: read    # checkout
-  packages: write   # push the image to the built-in Gitea container registry
 
 jobs:
   test:
@@ -64,8 +65,12 @@ jobs:
       uses: docker/login-action@v4
       with:
         registry: gitea.vvzvlad.xyz
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITEA_TOKEN }}
+        # Hardcoded for the same reason as the ghcr.io login: the repo is owned by the
+        # `projects` organisation, so github.repository_owner is an org name and
+        # github.actor is whichever account pushed — neither is guaranteed to be the
+        # account that owns the PAT.
+        username: vvzvlad
+        password: ${{ secrets.REGISTRY_TOKEN }}
 
     - name: Compute image tags
       id: tags
@@ -131,10 +136,11 @@ jobs:
         [ -n "$TAGS" ] || { echo "no tags computed" >&2; exit 1; }
         for tag in $TAGS; do docker push "$tag"; done
 
-    # The Gitea leg is the least battle-tested one, so it runs last and is non-blocking:
-    # by the time it fails the ghcr.io tags are already pushed and production is unaffected.
+    # The Gitea leg runs last and IS blocking: by this point the ghcr.io tags — the ones
+    # production pulls — are already pushed, so a red job here is an honest signal that the
+    # secondary registry is broken rather than a silent gap. Only the login above stays
+    # non-blocking, because failing there would abort the job before the ghcr.io push.
     - name: Push the images to the Gitea registry
-      continue-on-error: true
       env:
         TAGS: ${{ steps.tags.outputs.gitea_tags }}
       run: |
