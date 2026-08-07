@@ -17,3 +17,8 @@ data/*
 .claude/worktrees/
 .mypy_cache/
 .vscode/
+# Test artefacts — pytest-cov writes .coverage on every `make test`
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
