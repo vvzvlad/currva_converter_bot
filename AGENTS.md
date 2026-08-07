@@ -15,8 +15,19 @@ amount converted into other currencies. Also works in inline mode.
   - `user_settings_manager.py` — per-user / per-chat currency lists
   - `storage.py` — sqlite key-value store under both managers, plus the one-shot
     import of the pickleDB-era JSON files
-- `tests/` — pytest (`stubs.py` holds the shared test doubles; `conftest.py` only sets
-  the required ENV vars before `src.settings` is imported)
+- `tests/` — pytest, one package per area: `parser/`, `formatter/`, `storage/`,
+  `rates/`, `bot/`, `config/`, plus `test_currencies_reference.py` at the root
+  - a package gets a `conftest.py` only when it has fixtures of its own (`bot/`,
+    `formatter/`, `rates/`, `storage/`) and a `doubles.py` only when it has test doubles
+    (`bot/`, `rates/`, `storage/`) — a plain module rather than `conftest`, so
+    `--import-mode=importlib` keeps working. `parser/` and `config/` have neither.
+  - `tests/bot/conftest.py` additionally imports `src.bot` once, at collection time,
+    with the module's import-time side effects neutralised
+  - `stubs.py` — the one double shared across packages (`StubCurrencyParser`, behind the
+    root `parser` fixture); `logcapture.py` — `capture_logs()` / `assert_no_logs()` for
+    asserting on what a module logs
+  - the root `conftest.py` sets the required ENV vars before `src.settings` is
+    imported, and defines the shared `parser` fixture below that block
 - `data/` — runtime state (gitignored, mounted as a docker volume)
 - `main.py` — thin entry point over `src/`
 

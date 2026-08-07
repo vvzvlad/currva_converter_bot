@@ -289,7 +289,11 @@ class CurrencyParser:
         try:
             amount = float(clean_amount)
         except ValueError:
-            logger.error(f"Failed to convert '{clean_amount}' to float from original '{amount_str}'")
+            # DEBUG, not ERROR: this is an ordinary outcome of running the parser over
+            # arbitrary chat text, not a fault of the service. At ERROR anyone could
+            # flood the log by sending such strings in bulk, and the fragment of user
+            # input below would be written out at the default level.
+            logger.debug(f"Failed to convert '{clean_amount}' to float from original '{amount_str}'")
             return None, base_currency
 
         return amount * multiplier, base_currency

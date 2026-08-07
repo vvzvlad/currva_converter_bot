@@ -39,3 +39,19 @@ atexit.register(shutil.rmtree, _STATE_DIR, ignore_errors=True)
 os.environ["EXCHANGE_RATES_CACHE_PATH"] = os.path.join(_STATE_DIR, "exchange_rates_cache.json")
 os.environ["STATISTICS_DB_PATH"] = os.path.join(_STATE_DIR, "statistics.db")
 os.environ["USER_SETTINGS_DB_PATH"] = os.path.join(_STATE_DIR, "user_settings.db")
+
+# Imported BELOW the block above and not at the top of the file: everything under src/
+# reads its configuration from a Settings instance built at import time, so nothing that
+# can reach src.settings may be imported before those variables are in the environment.
+# tests.stubs only pulls in src.currency_parser, which does not, but the ordering is the
+# invariant of this file and is kept visible rather than relied upon.
+import pytest
+
+from tests.stubs import StubCurrencyParser
+
+
+@pytest.fixture(scope="module")
+def parser():
+    # CurrencyParser.__init__ compiles ~170 regexes; module scope keeps that off the
+    # per-test path. The parser is stateless once built, so sharing it is safe.
+    return StubCurrencyParser()
