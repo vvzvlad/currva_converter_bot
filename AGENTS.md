@@ -53,9 +53,21 @@ make run               # runs .venv/bin/python main.py
   never written to the log through a logger — not even partially. `LOG_LEVEL=DEBUG`
   does not switch on HTTP request logging (the HTTP client loggers are clamped to
   `max(INFO, LOG_LEVEL)`), so the bot token embedded in every Telegram API URL does not
-  reach the log that way. An uncaught exception is a different path: `requests` puts the
-  full request URL into its message, so a traceback printed to stderr can still expose
-  the token regardless of `LOG_LEVEL`.
+  reach the log that way.
+- On top of that, `src/bot.py` installs a redaction layer that masks the bot token as
+  `<BOT_TOKEN>`, `API_KEY` as `<API_KEY>` and `INFLUX_TOKEN` as `<INFLUX_TOKEN>`: a
+  filter on LOGGING HANDLERS — message, args, the rendered traceback of `exc_info` and
+  `stack_info` — plus `sys.excepthook` and `threading.excepthook` for uncaught exceptions
+  in the main thread and in telebot workers. That is the path that used to leak:
+  `requests` puts the full request URL into its exception text.
+  `Logger.callHandlers` goes from the emitting logger UP to the root, so a handler on
+  some other logger runs BEFORE the root handlers (`telebot` adds one to the `TeleBot`
+  logger at import) — the filter therefore goes on the handlers of every logger that
+  already exists, and `Logger.addHandler` is wrapped so handlers attached later are
+  covered as well. It covers what goes through `logging` and the two hooks, and it is
+  NOT a proof that the token cannot leak: a `print()`, a direct write to `stdout` or a
+  C-level library never reaches the filter — so still never log credentials on purpose,
+  and prefer `exc_info=True` over interpolating `str(exc)` into the message.
 - No default/example credentials in code; missing ENV var → fail at startup.
 - Code comments are in English.
 - All repeated actions (env setup, tests, run) go through `make` targets — add or

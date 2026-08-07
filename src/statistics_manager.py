@@ -24,6 +24,41 @@ logging.basicConfig(
 logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 
 
+# Stand-in for a timestamp we could not read. Old enough to sort such entries to the
+# bottom of every "recently active" list without dropping the entry itself.
+UNKNOWN_TIMESTAMP = datetime(2000, 1, 1)
+
+# How long close() waits for the reporting thread. The thread parks on the stop event
+# between reports, so this only matters when it is inside an HTTP request (capped at
+# 10 seconds by the request timeout below).
+#
+# Deliberately short: close() runs from bot.shutdown_managers(), i.e. from inside the
+# SIGTERM handler, and docker's stop_grace_period covers the WHOLE shutdown. Waiting
+# out a stalled POST here would spend the time the sqlite close needs and let SIGKILL
+# land in the middle of it. The thread is a daemon and dies with the process anyway.
+REPORTING_STOP_TIMEOUT = 2
+
+
+def _parse_timestamp(value, field: str) -> datetime:
+    """Read a stored ISO timestamp, tolerating anything that is not one.
+
+    These strings come out of a JSON blob that outlives restarts and went through the
+    pickleDB import, so one truncated or hand-edited value used to raise straight out
+    of get_statistics — taking down /stats AND every iteration of the InfluxDB
+    reporting loop for as long as the bad row stayed in the database.
+    """
+    if value is None:
+        return UNKNOWN_TIMESTAMP
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            pass
+    # The value itself is not logged: it is user-adjacent stored data.
+    logger.warning(f"Unreadable '{field}' timestamp in statistics, falling back to {UNKNOWN_TIMESTAMP.date()}")
+    return UNKNOWN_TIMESTAMP
+
+
 class StatisticsManager:
     def __init__(self, db_file: str = settings.statistics_db_path):
         # This lock is NOT redundant now that KeyValueStore has one of its own.
@@ -41,7 +76,9 @@ class StatisticsManager:
         self._influx_configured = False
         self._influx_params = None
         self._reporting_thread = None
-        self._stop_reporting = False
+        # An Event, not a flag: the reporting thread waits on it instead of sleeping,
+        # so close() stops it at once instead of leaving it parked for a whole period.
+        self._stop_reporting = threading.Event()
         self._influx_topic = None
         self._reporting_period = 300
 
@@ -60,7 +97,7 @@ class StatisticsManager:
         self._influx_configured = False
         self._influx_params = None
         self._reporting_thread = None
-        self._stop_reporting = False
+        self._stop_reporting.clear()
 
         # Try to configure InfluxDB from settings
         influx_version = settings.influx_version
@@ -211,8 +248,8 @@ class StatisticsManager:
                     'requests': data['requests'],
                     'inline_requests': data.get('inline_requests', 0),
                     'total_requests': data['requests'] + data.get('inline_requests', 0),
-                    'last_active': datetime.fromisoformat(data.get('last_active', '2000-01-01T00:00:00')),
-                    'first_seen': datetime.fromisoformat(data.get('first_seen', '2000-01-01T00:00:00'))
+                    'last_active': _parse_timestamp(data.get('last_active'), 'last_active'),
+                    'first_seen': _parse_timestamp(data.get('first_seen'), 'first_seen')
                 }
                 for _user_id, data in users.items()
             ]
@@ -240,7 +277,12 @@ class StatisticsManager:
                 }
                 for _chat_id, data in chats.items()
             ]
-            top_chats = sorted(top_chats, key=lambda x: x['requests'], reverse=True)[:stat_limit]
+            # Same "anything but a positive limit means all of them" rule as top_users
+            # above: the metrics thread asks for stat_limit=-1, and a bare [:-1]
+            # silently dropped the last chat from what it reported.
+            top_chats = sorted(top_chats, key=lambda x: x['requests'], reverse=True)
+            if stat_limit > 0:
+                top_chats = top_chats[:stat_limit]
 
             # Return statistics dictionary
             return {
@@ -295,11 +337,11 @@ class StatisticsManager:
     def _report_metrics(self):
         """Report metrics to InfluxDB periodically"""
         logger.info("Starting metrics reporting thread")
-        while not self._stop_reporting:
+        while not self._stop_reporting.is_set():
             try:
 
                 if not self._influx_configured or not self._influx_params:
-                    time.sleep(self._reporting_period)
+                    self._stop_reporting.wait(self._reporting_period)
                     logger.info(f"Waiting for InfluxDB to be configured... (period: {self._reporting_period}s)")
                     continue
                 
@@ -330,23 +372,27 @@ class StatisticsManager:
                     
             except Exception as e:
                 logger.error(f"Error reporting metrics to InfluxDB: {str(e)}")
-            
-            time.sleep(self._reporting_period)
+
+            self._stop_reporting.wait(self._reporting_period)
 
     def close(self) -> None:
-        """Stop reporting and close the store. Public on purpose — see bot.close_storage.
+        """Stop reporting and close the store. Public on purpose — see bot.shutdown_managers.
 
-        The stop flag is set BEFORE the connection goes away: _report_metrics reads
-        the database (get_statistics) and posts first, sleeping only afterwards, so a
+        The stop event is set BEFORE the connection goes away: _report_metrics reads
+        the database (get_statistics) and posts first, waiting only afterwards, so a
         connection closed under it raises "Cannot operate on a closed database". The
         broad except in that loop keeps it harmless, but it would still print an
-        ERROR on every clean shutdown.
-        """
-        self._stop_reporting = True
-        self._db.close()
+        ERROR on every clean shutdown. Joining the thread first closes even that gap
+        in the normal case.
 
-    def __del__(self):
-        """Cleanup when object is destroyed"""
-        self._stop_reporting = True
-        if self._reporting_thread:
-            self._reporting_thread.join(timeout=1)
+        This is the ONLY way the reporting thread is stopped. There used to be a
+        __del__ doing it as well, which is not a mechanism to rely on: it may never
+        run (a reference cycle, or interpreter exit), and when it does run during
+        shutdown the module globals it touches may already be gone. Safe to call more
+        than once — the signal path calls it and main()'s finally calls it again.
+        """
+        self._stop_reporting.set()
+        thread = self._reporting_thread
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=REPORTING_STOP_TIMEOUT)
+        self._db.close()

@@ -18,6 +18,12 @@ logging.basicConfig(
 logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 
 
+# Amounts worth this much or more in USD get the joke instead of a conversion.
+RICH_JOKE_THRESHOLD_USD = Decimal('1000000')
+
+# Conversions listed in one reply before the "count them yourself" line takes over.
+MAX_LISTED_CONVERSIONS = 10
+
 
 class CurrencyFormatter:
     def __init__(self):
@@ -79,12 +85,18 @@ class CurrencyFormatter:
             return f"{original} ({currency.flag}): других валют для конвертации не установлено. Используйте /currencies"
 
         if mode == 'chat':
-            usd_amount = amount # if currency is USD 
-            if currency_code != 'USD':
+            # None means "we cannot tell how much this is in dollars". Comparing the
+            # raw amount instead fired the joke on any large number in a weak
+            # currency — 5 000 000 драм is about 12k USD, and the user got the
+            # punchline instead of a conversion.
+            usd_amount = None
+            if currency_code == 'USD':
+                usd_amount = Decimal(str(amount))
+            else:
                 rate = rates.get(f"{currency_code}_USD")
                 if rate:
                     usd_amount = Decimal(str(amount)) * Decimal(str(rate))
-            if usd_amount >= 1_000_000:
+            if usd_amount is not None and usd_amount >= RICH_JOKE_THRESHOLD_USD:
                 return f"Откуда у тебя такие деньги, сынок?"
         
         # Initialize message based on mode
@@ -131,11 +143,15 @@ class CurrencyFormatter:
             
         return message
     
-    def format_multiple_conversions(self, currency_list: List[Tuple[float, str, str]], rates: Dict[str, float], mode: str = 'chat', user_currencies: Optional[List[str]] = None) -> str:
-        """Format multiple currency conversions"""
+    def format_multiple_conversions(self, currency_list: List[Tuple[float, str, str]], rates: Dict[str, float], mode: str = 'chat', user_currencies: Optional[List[str]] = None) -> Optional[str]:
+        """Format multiple currency conversions.
+
+        None (not an empty string) for an empty list — the callers in bot.py treat a
+        falsy result as "nothing to reply with"; the annotation now says so.
+        """
         if not currency_list:
-            return None 
-            
+            return None
+
         # Deduplication by amount and currency
         seen = set()
         unique_conversions = []
@@ -145,17 +161,20 @@ class CurrencyFormatter:
                 seen.add(key)
                 unique_conversions.append((amount, curr, original))
                 
-        # Limit number of conversions to 10
-        if len(unique_conversions) > 10:
-            unique_conversions = unique_conversions[:10]
-            
+        # Limit number of conversions to MAX_LISTED_CONVERSIONS. Counted AFTER
+        # deduplication: twelve matches of which five are unique are all shown, so
+        # promising "the rest" on the raw count was simply untrue.
+        truncated = len(unique_conversions) > MAX_LISTED_CONVERSIONS
+        if truncated:
+            unique_conversions = unique_conversions[:MAX_LISTED_CONVERSIONS]
+
         conversions = []
         for amount, curr, original in unique_conversions:
             conversion = self.format_conversion((amount, curr, original), rates, mode=mode, user_currencies=user_currencies)
             if conversion:
                 conversions.append(conversion)
-                
-        if len(currency_list) > 10:
+
+        if truncated:
             conversions.append("... и остальные (сами считайте)")
-                
+
         return "\n".join(conversions)

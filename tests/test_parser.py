@@ -882,3 +882,34 @@ class TestCurrencyParsing(unittest.TestCase):
         # The length is logged, the message text is not.
         self.assertIn(str(len(over_limit)), captured.output[0])
         self.assertNotIn("рублей", captured.output[0])
+
+    def test_unparseable_amounts_are_dropped_instead_of_becoming_zero(self):
+        """An amount the normaliser cannot make sense of must disappear, quietly.
+
+        "1.000,000.5" matches the amount regex, and once the thousands dots are
+        stripped "1000,0005" is left — not a number. float() raised straight out of
+        find_currencies, the handler's blanket except swallowed it, and the WHOLE
+        message was lost with it: other amounts included, and an inline query got no
+        answer at all. The neighbouring branch of the same normaliser had the mirror
+        problem — it answered 0.0, and a zero amount is what the formatter replies to
+        with an insult.
+        """
+        with self.assertLogs("currency_parser", level="ERROR"):
+            self.assertEqual(self.parser.find_currencies("1.000,000.5 евро"), [])
+
+        # Everything else in the message still gets converted.
+        with self.assertLogs("currency_parser", level="ERROR"):
+            self.assertEqual(
+                self.parser.find_currencies("1.000,000.5 евро и 100 долларов"),
+                [(100.0, "USD", "100 долларов")],
+            )
+
+        # Same shape, separators the other way round.
+        with self.assertLogs("currency_parser", level="ERROR"):
+            self.assertEqual(self.parser.find_currencies("1.000.000,50 евро"), [])
+
+        # A genuine zero is not an unparseable amount and keeps behaving exactly as
+        # before — the formatter's reply to it is covered in test_formatter.
+        self.assertEqual(self.parser.find_currencies("0 рублей"), [(0.0, "RUB", "0 рублей")])
+        self.assertEqual(self.parser.find_currencies("0,00 долларов"), [(0.0, "USD", "0,00 долларов")])
+        self.assertEqual(self.parser.find_currencies("0.5 USD"), [(0.5, "USD", "0.5 USD")])

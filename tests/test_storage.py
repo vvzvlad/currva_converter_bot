@@ -16,6 +16,7 @@ import tempfile
 import threading
 import time
 import unittest
+import unittest.mock
 from contextlib import closing
 from pathlib import Path
 
@@ -705,6 +706,65 @@ class TestStatisticsManager(StorageTestCase):
         manager._db.close()
         with closing(sqlite3.connect(str(self.tmp_path / "statistics.db"))) as raw:
             self.assertEqual(raw.execute("SELECT COUNT(*) FROM kv").fetchone()[0], 0)
+
+    def test_an_unreadable_timestamp_does_not_take_down_the_statistics(self):
+        """One bad string in the stored blob used to raise out of get_statistics —
+        killing /stats and every iteration of the InfluxDB reporting loop with it,
+        for as long as the row stayed in the database."""
+        manager = self.make_manager()
+        manager.log_request(StubUser(7, "testuser", "Test User"), -100, "Test chat")
+
+        users = manager._db.get("users")
+        users["7"]["last_active"] = "2024-13-45T99:"  # truncated / hand-edited
+        users["7"]["first_seen"] = None
+        manager._db.set("users", users)
+
+        with self.assertLogs("statistics_manager", level="WARNING") as captured:
+            stats = manager.get_statistics(stat_limit=10)
+
+        self.assertTrue(any("last_active" in line for line in captured.output))
+        self.assertEqual(stats["unique_users"], 1)
+        self.assertEqual(stats["top_users"][0]["total_requests"], 1)
+        self.assertIn("last_active_str", stats["top_users"][0])
+        # The value itself is not echoed into the log.
+        self.assertFalse(any("2024-13-45" in line for line in captured.output))
+
+    def test_a_non_positive_stat_limit_returns_every_chat(self):
+        """The metrics thread calls get_statistics(stat_limit=-1); [: -1] quietly
+        dropped the last chat, while the user list already handled the same case."""
+        manager = self.make_manager()
+        user = StubUser(7, "testuser", "Test User")
+        for chat_id, title in ((-1, "First"), (-2, "Second"), (-3, "Third")):
+            manager.log_request(user, chat_id, title)
+
+        for limit in (-1, 0):
+            stats = manager.get_statistics(stat_limit=limit)
+            self.assertEqual(len(stats["top_chats"]), 3, f"stat_limit={limit}")
+            self.assertEqual(len(stats["top_users"]), 1, f"stat_limit={limit}")
+
+        self.assertEqual(len(manager.get_statistics(stat_limit=2)["top_chats"]), 2)
+
+    def test_close_stops_the_reporting_thread(self):
+        """Shutdown goes through close(), not through __del__ — which may never run,
+        and runs against a half-torn-down interpreter when it does."""
+        self.assertFalse(hasattr(StatisticsManager, "__del__"))
+
+        manager = self.make_manager()
+        manager._influx_topic = "test_topic"
+        manager._reporting_period = 0.05
+
+        response = unittest.mock.Mock()
+        response.status_code = 204
+        with unittest.mock.patch("src.statistics_manager.requests.post", return_value=response):
+            manager.configure_metrics_v2("http://influx.invalid", "token", "org", "bucket")
+            thread = manager._reporting_thread
+            self.assertTrue(thread.is_alive())
+
+            manager.close()
+
+        thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+        self.assertTrue(manager._stop_reporting.is_set())
 
 
 if __name__ == "__main__":

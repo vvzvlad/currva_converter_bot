@@ -6,7 +6,7 @@
 import unittest
 
 from src.currencies import CURRENCIES
-from src.currency_formatter import CurrencyFormatter
+from src.currency_formatter import MAX_LISTED_CONVERSIONS, CurrencyFormatter
 
 from tests.stubs import StubCurrencyParser, StubExchangeRatesManager
 
@@ -145,3 +145,66 @@ class TestCurrencyFormatting(unittest.TestCase):
             currency_list = self.parser.find_currencies("100 долларов")
             result = self.formatter.format_multiple_conversions(currency_list, {}, mode='inline')
             self.assertEqual(result, "100 долларов (нет доступных курсов конвертации)")
+
+
+class TestMillionaireJoke(unittest.TestCase):
+    """The "Откуда у тебя такие деньги, сынок?" threshold is in DOLLARS.
+
+    Without a `{currency}_USD` rate the dollar amount stayed equal to the amount in
+    the source currency, so the threshold was applied to the raw number: 5 000 000
+    драм (about 12 000 USD) got the punchline instead of a conversion.
+    """
+
+    def setUp(self):
+        self.formatter = CurrencyFormatter()
+
+    def test_big_amount_without_a_usd_rate_is_converted_normally(self):
+        rates = {"AMD_RUB": 0.24}
+        result = self.formatter.format_conversion((5_000_000, "AMD", "5 000 000 драм"), rates, mode='chat')
+        self.assertNotIn("Откуда", result)
+        self.assertIn("₽", result)
+
+    def test_big_amount_that_is_small_in_dollars_is_converted_normally(self):
+        rates = {"AMD_USD": 0.0026, "AMD_RUB": 0.24}
+        result = self.formatter.format_conversion((5_000_000, "AMD", "5 000 000 драм"), rates, mode='chat')
+        self.assertNotIn("Откуда", result)
+
+    def test_the_joke_still_fires_when_the_amount_really_is_a_million_dollars(self):
+        rates = {"AMD_USD": 0.0026, "AMD_RUB": 0.24}
+        result = self.formatter.format_conversion((500_000_000, "AMD", "500 000 000 драм"), rates, mode='chat')
+        self.assertEqual(result, "Откуда у тебя такие деньги, сынок?")
+
+    def test_dollars_need_no_rate_at_all(self):
+        # The source currency IS the threshold currency, so an empty rates dict
+        # changes nothing here.
+        result = self.formatter.format_conversion((2_000_000, "USD", "2000000 долларов"), {}, mode='chat')
+        self.assertEqual(result, "Откуда у тебя такие деньги, сынок?")
+
+    def test_inline_mode_never_jokes(self):
+        result = self.formatter.format_conversion((2_000_000, "USD", "2000000 долларов"), {"USD_RUB": 1.0}, mode='inline')
+        self.assertNotIn("Откуда", result)
+
+
+class TestConversionListTruncation(unittest.TestCase):
+    def setUp(self):
+        self.formatter = CurrencyFormatter()
+        self.rates = {f"{a}_{b}": 1.0 for a in CURRENCIES for b in CURRENCIES if a != b}
+
+    def test_the_rest_note_counts_unique_amounts_not_raw_matches(self):
+        # Twelve matches, five distinct amounts: all five fit, so promising "the rest"
+        # would simply be a lie.
+        currency_list = [(float(i % 5) + 1, "USD", f"{i % 5 + 1} долларов") for i in range(12)]
+        result = self.formatter.format_multiple_conversions(currency_list, self.rates, mode='chat')
+        self.assertNotIn("и остальные", result)
+        self.assertEqual(len(result.split("\n")), 5)
+
+    def test_more_unique_amounts_than_the_limit_are_truncated_with_the_note(self):
+        currency_list = [(float(i), "USD", f"{i} долларов") for i in range(1, 15)]
+        result = self.formatter.format_multiple_conversions(currency_list, self.rates, mode='chat')
+        lines = result.split("\n")
+        self.assertEqual(len(lines), MAX_LISTED_CONVERSIONS + 1)
+        self.assertEqual(lines[-1], "... и остальные (сами считайте)")
+
+    def test_empty_list_still_returns_none(self):
+        # Behaviour deliberately unchanged; only the annotation was corrected.
+        self.assertIsNone(self.formatter.format_multiple_conversions([], self.rates, mode='chat'))

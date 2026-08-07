@@ -67,7 +67,8 @@ All configuration comes from environment variables (or a local `.env`, see `.env
 | `BOT_TOKEN` | yes | — | Telegram bot token from @BotFather. |
 | `API_KEY` | yes | — | API key for https://api.apilayer.com/currency_data |
 | `ADMIN_USER_ID` | yes | — | Telegram user id allowed to run `/stats`. |
-| `LOG_LEVEL` | no | `INFO` | `CRITICAL`/`ERROR`/`WARNING`/`INFO`/`DEBUG`, case-insensitive. `DEBUG` only affects the bot's own logging: the HTTP client loggers are clamped to `max(INFO, LOG_LEVEL)` on purpose, so `DEBUG` does not turn on request logging and the bot token does not reach the log through the loggers. An uncaught exception can still print a traceback containing the full request URL to stderr. |
+| `LOG_LEVEL` | no | `INFO` | `CRITICAL`/`ERROR`/`WARNING`/`INFO`/`DEBUG`, case-insensitive. `DEBUG` only affects the bot's own logging: the HTTP client loggers are clamped to `max(INFO, LOG_LEVEL)` on purpose, so `DEBUG` does not turn on request logging. The bot token is additionally masked in logging records and in uncaught tracebacks (see [Secrets in the logs](#secrets-in-the-logs)), at any `LOG_LEVEL`. |
+| `WATCH_CODE_CHANGES` | no | `false` | Development only: restart the process on any change to a file in `src/`. Accepts `true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off` (any case); empty means off. Leave it off in a container — the code never changes under a running image, and the restart uses `os.execv()`, which replaces the process immediately, so the shutdown path that closes the sqlite stores never runs. |
 | `EXCHANGE_RATES_CACHE_PATH` | no | `data/exchange_rates_cache.json` | Rates cache file. Rarely worth changing. |
 | `STATISTICS_DB_PATH` | no | `data/statistics.db` | Statistics sqlite database. Rarely worth changing. |
 | `USER_SETTINGS_DB_PATH` | no | `data/user_settings.db` | Per-user/chat settings sqlite database. Rarely worth changing. |
@@ -87,6 +88,30 @@ A missing required variable fails the bot at startup with a message naming the v
 The three `*_PATH` variables are relative to the working directory — which is `/app` in the
 container and the repository root under `make run`, so the defaults resolve to the `data/`
 volume in both cases. There is normally no reason to override them.
+
+## Secrets in the logs
+
+Every Telegram API call goes to `/bot<TOKEN>/<method>`, and `requests` puts the full URL
+into the text of its exceptions — so the token can reach the log through code that has
+nothing to do with the bot's own logging calls. `src/bot.py` therefore scrubs it centrally,
+at the points where text leaves the process:
+
+- a filter on **logging handlers** — message, arguments, rendered traceback and stack info
+  alike. `Logger.callHandlers` walks from the emitting logger up to the root, so a handler
+  sitting on some other logger sees the record *before* the root handlers do (`telebot`
+  installs exactly such a handler on the `TeleBot` logger). The filter is therefore added
+  to the handlers of every logger that exists at startup, and `Logger.addHandler` is
+  wrapped so handlers attached later — by a lazily imported dependency, or by another
+  `logging.basicConfig()` — get it too;
+- `sys.excepthook` and `threading.excepthook`, so an **uncaught exception** in the main
+  thread or in a telebot worker prints a traceback with the token already masked.
+
+The bot token becomes `<BOT_TOKEN>`, `API_KEY` becomes `<API_KEY>` and `INFLUX_TOKEN`
+becomes `<INFLUX_TOKEN>`, at any `LOG_LEVEL`. This covers what goes through Python's
+logging machinery and the two exception hooks; it is **not** a guarantee that the token
+cannot leak. Anything writing to `stdout`/`stderr` directly, a `print()`, a C-level
+library or a handler installed by bypassing `addHandler` never reaches the filter — so
+still never log credentials on purpose.
 
 ## State storage
 

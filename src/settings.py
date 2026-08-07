@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +16,13 @@ class Settings(BaseSettings):
     admin_user_id: int
 
     log_level: str = "INFO"
+
+    # Development convenience: restart the process whenever a file in src/ changes.
+    # Off by default and pointless in a container (the code never changes under a
+    # running image), and it is not free: the restart goes through os.execv() from the
+    # watchdog observer thread, which replaces the process image immediately — main()'s
+    # finally never runs, so the sqlite stores are never closed properly.
+    watch_code_changes: bool = False
 
     # All mutable state lives under data/ (mounted as a docker volume).
     # The two *_db_path files are sqlite databases; on first start each one
@@ -49,6 +58,24 @@ class Settings(BaseSettings):
         if normalised not in allowed:
             raise ValueError(f"must be one of: {', '.join(sorted(allowed))}")
         return normalised
+
+    @field_validator("watch_code_changes", mode="before")
+    @classmethod
+    def _empty_flag_is_off(cls, value: Any) -> Any:
+        """Treat an empty / whitespace-only value as "off", and tolerate padding.
+
+        pydantic understands true/false, 1/0, yes/no, on/off (any case) and rejects
+        everything else with a readable message, which load_settings_or_exit turns into
+        a named-variable error. It does NOT accept an empty string, though, and
+        `WATCH_CODE_CHANGES=` left over in a .env or a compose file is a perfectly
+        ordinary way of writing "not set" — failing the whole bot at startup over an
+        optional development flag would be a crash-loop for no reason. Stripping also
+        makes ` true ` (trivially easy to produce in YAML) behave like `true`.
+        """
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return False if not cleaned else cleaned
+        return value
 
     @field_validator("statistics_db_path", "user_settings_db_path")
     @classmethod

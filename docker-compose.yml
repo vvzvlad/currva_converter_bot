@@ -14,6 +14,12 @@ services:
     # image: gitea.vvzvlad.xyz/projects/currva_converter_bot:latest
     container_name: currva-converter-bot
     restart: always
+    # SIGTERM handler: stops two background threads (each may be inside an HTTP request)
+    # and closes both sqlite databases. The thread joins are capped at 2s each, so the
+    # whole shutdown fits well under this — the margin is there so SIGKILL can never
+    # land while sqlite is closing, which is the uncheckpointed -wal file the graceful
+    # shutdown exists to prevent. Compose defaults to 10s, which the joins could eat.
+    stop_grace_period: 30s
     # The app runs as non-root user `app` (uid 1000): the entrypoint starts as
     # root, chowns /app/data and drops privileges via gosu. Setting a
     # `user: "UID:GID"` override here makes the entrypoint skip the chown —

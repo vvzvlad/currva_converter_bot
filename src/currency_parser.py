@@ -4,7 +4,7 @@
 # type: ignore
 
 import re
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import logging
 import os
 
@@ -62,7 +62,6 @@ class CurrencyParser:
         # The decimal tail and the "к" suffix stay ordinary greedy on purpose — "5крон"
         # only parses if the engine may give the "к" back so that "крон" can match.
         self.number = r'(?P<amount>(?:\d{1,3}+(?:[., ]\d{3}(?!\d)){0,6}|(?<!\d)\d++)(?:[.,]\d+)?(?:к)?)'
-        self.current_match = ''
 
         handwritten = [
             ('ILS',     fr'{self.number}\s*(?:шекел(?:ей|я|ь)|шек|шах|ils|ILS|₪)\b'),
@@ -184,7 +183,15 @@ class CurrencyParser:
             (curr, re.compile(pattern, re.IGNORECASE)) 
             for curr, pattern in self.patterns
         ]
-    def _convert_amount(self, amount_str: str, currency: str) -> Tuple[float, str]:
+    def _convert_amount(self, amount_str: str, currency: str) -> Tuple[Optional[float], str]:
+        """Normalise a matched amount into a number.
+
+        Returns (None, currency) when the text matched a currency pattern but the
+        number in it is not a number we can make sense of ("1.000,000.5"). The caller
+        drops such a match: turning it into 0.0 made the formatter answer an insult
+        (its reply to a genuine zero), and letting the ValueError escape killed the
+        whole message — every other amount in it included.
+        """
         multiplier = 1
         clean_amount = amount_str
         base_currency = currency
@@ -232,7 +239,6 @@ class CurrencyParser:
             elif '.' in clean_amount and clean_amount.count('.') > 1:
                 # For formats like 1.000.000
                 clean_amount = clean_amount.replace('.', '')
-            amount = float(clean_amount)
         else:
             if ',' in clean_amount and '.' in clean_amount: 
                 # If both separators present, last one is decimal
@@ -254,13 +260,17 @@ class CurrencyParser:
                 else:
                     # Assume thousands separator
                     clean_amount = clean_amount.replace(',', '')
-            
-            try:
-                amount = float(clean_amount)
-            except ValueError:
-                logger.error(f"Failed to convert '{clean_amount}' to float from original '{amount_str}'")
-                amount = 0.0
-            
+
+        # Both branches above only normalise the separators; the single conversion
+        # lives here so that neither of them can leak a malformed number out as an
+        # exception or as a silent zero. "1.000,000.5" reaches this point as
+        # "1000,0005" — matched by the regex, but not a number.
+        try:
+            amount = float(clean_amount)
+        except ValueError:
+            logger.error(f"Failed to convert '{clean_amount}' to float from original '{amount_str}'")
+            return None, base_currency
+
         return amount * multiplier, base_currency
 
     def find_currencies(self, text: str) -> List[Tuple[float, str, str]]:
@@ -294,9 +304,18 @@ class CurrencyParser:
                     valid_start = False
                 
                 if valid_start and valid_end:
-                    self.current_match = match.group(0)
+                    # A local, never an attribute on self: one CurrencyParser is shared by
+                    # every telebot worker thread, and _convert_amount() runs between the
+                    # assignment and the append below — long enough for another thread to
+                    # overwrite the attribute and put someone else's message text into
+                    # this reply.
+                    current_match = match.group(0)
                     amount, base_currency = self._convert_amount(match.group('amount'), currency)
-                    matches.append(( start_pos, end_pos, amount, base_currency, self.current_match ))
+                    # An amount we could not parse is dropped instead of being counted
+                    # as zero: the rest of the message still gets an answer.
+                    if amount is None:
+                        continue
+                    matches.append(( start_pos, end_pos, amount, base_currency, current_match ))
         
         # Sort matches by start position
         matches.sort(key=lambda x: x[0])

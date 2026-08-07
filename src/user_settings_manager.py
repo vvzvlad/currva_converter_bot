@@ -31,7 +31,7 @@ class UserSettingsManager:
         logger.info("User settings manager initialized")
 
     def close(self) -> None:
-        """Close the underlying store. Public on purpose — see bot.close_storage."""
+        """Close the underlying store. Public on purpose — see bot.shutdown_managers."""
         self._db.close()
 
     def get_currencies(self, entity_id: int, is_chat: bool = False) -> Optional[List[str]]:
