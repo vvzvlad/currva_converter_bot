@@ -9,13 +9,12 @@ from datetime import datetime
 import threading
 import time
 import os
-from pathlib import Path
 
 import requests
-import pickledb
 from telebot.types import User
 
 from src.settings import settings
+from src.storage import KeyValueStore
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,10 +26,17 @@ logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 
 class StatisticsManager:
     def __init__(self, db_file: str = settings.statistics_db_path):
-        Path(db_file).parent.mkdir(parents=True, exist_ok=True)
+        # This lock is NOT redundant now that KeyValueStore has one of its own.
+        # The store makes each individual statement atomic; this lock makes the
+        # read-modify-write sequences atomic (log_request reads 'users', mutates
+        # the dict in Python and writes it back — two concurrent handlers without
+        # this lock would silently lose one of the increments).
+        # No deadlock risk: the order is always manager lock -> store lock, never
+        # the reverse. The store never calls back into the manager, and the store
+        # lock is released before each store method returns.
         self._lock = threading.Lock()
-        self._db = pickledb.load(db_file, auto_dump=True)
-        
+        self._db = KeyValueStore(db_file)
+
         # Initialize InfluxDB attributes
         self._influx_configured = False
         self._influx_params = None
@@ -38,20 +44,14 @@ class StatisticsManager:
         self._stop_reporting = False
         self._influx_topic = None
         self._reporting_period = 300
-        
-        # Initialize default values if DB is empty
-        with self._lock:
-            if not self._db.get('total_requests'):
-                self._db.set('total_requests', 0)
-            if not self._db.get('total_inline_requests'):
-                self._db.set('total_inline_requests', 0)
-            if not self._db.get('users'):
-                self._db.set('users', {})
-            if not self._db.get('chats'):
-                self._db.set('chats', {})
-            if not self._db.get('last_update'):
-                self._db.set('last_update', datetime.now().isoformat())
-        
+
+        # No counter seeding here on purpose. Every read below already supplies its
+        # own default ("total_requests", 0 / get('users') or {}), so writing zeroes
+        # at startup bought nothing — and it actively broke recovery: KeyValueStore
+        # decides whether to import the legacy JSON by looking at whether the table
+        # is empty, and these five rows made it non-empty on the very first start.
+        # A first start that failed to import (broken JSON) would then never retry.
+
         logger.info("Statistics manager initialized")
         self._initialize_influx()
 
@@ -121,14 +121,21 @@ class StatisticsManager:
         """Log a request from user in specific chat"""
         with self._lock:
             try:
+                # Everything this request changes is collected here and written
+                # as ONE transaction at the end. With pickledb every set() dumped
+                # the whole file (twice, from two threads), so a single message
+                # meant up to ten full rewrites of a file that grows with the
+                # user count — all of it while holding this lock.
+                updates: Dict = {}
+
                 # Update total requests
                 if is_inline:
-                    total_inline = self._db.get('total_inline_requests')
-                    self._db.set('total_inline_requests', total_inline + 1)
+                    total_inline = self._db.get('total_inline_requests', 0)
+                    updates['total_inline_requests'] = total_inline + 1
                 else:
-                    total = self._db.get('total_requests')
-                    self._db.set('total_requests', total + 1)
-                
+                    total = self._db.get('total_requests', 0)
+                    updates['total_requests'] = total + 1
+
                 # Update user statistics
                 if user.id:
                     users = self._db.get('users') or {}
@@ -157,9 +164,9 @@ class StatisticsManager:
                         users[user_id_str]['username'] = user.username
                     if user.first_name:  # Update first_name if available
                         users[user_id_str]['first_name'] = user.first_name
-                    
-                    self._db.set('users', users)
-                
+
+                    updates['users'] = users
+
                 # Update chat statistics
                 if chat_id and chat_id != user.id:  # Don't log private chats as separate entries
                     chats = self._db.get('chats') or {}
@@ -175,12 +182,14 @@ class StatisticsManager:
                     chats[chat_id_str]['requests'] += 1
                     if chat_title:  # Update chat title if available
                         chats[chat_id_str]['title'] = chat_title
-                    
-                    self._db.set('chats', chats)
-                
+
+                    updates['chats'] = chats
+
                 # Update last update timestamp
-                self._db.set('last_update', datetime.now().isoformat())
-                
+                updates['last_update'] = datetime.now().isoformat()
+
+                self._db.set_many(updates)
+
             except Exception as e:
                 logger.error(f"Failed to log request: {e}")
     
@@ -235,8 +244,8 @@ class StatisticsManager:
 
             # Return statistics dictionary
             return {
-                'total_requests': self._db.get('total_requests'),
-                'total_inline_requests': self._db.get('total_inline_requests'),
+                'total_requests': self._db.get('total_requests', 0),
+                'total_inline_requests': self._db.get('total_inline_requests', 0),
                 'unique_users': len(users),
                 'unique_chats': len(chats),
                 'top_users': top_users,
@@ -323,6 +332,18 @@ class StatisticsManager:
                 logger.error(f"Error reporting metrics to InfluxDB: {str(e)}")
             
             time.sleep(self._reporting_period)
+
+    def close(self) -> None:
+        """Stop reporting and close the store. Public on purpose — see bot.close_storage.
+
+        The stop flag is set BEFORE the connection goes away: _report_metrics reads
+        the database (get_statistics) and posts first, sleeping only afterwards, so a
+        connection closed under it raises "Cannot operate on a closed database". The
+        broad except in that loop keeps it harmless, but it would still print an
+        ERROR on every clean shutdown.
+        """
+        self._stop_reporting = True
+        self._db.close()
 
     def __del__(self):
         """Cleanup when object is destroyed"""

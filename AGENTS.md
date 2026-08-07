@@ -13,12 +13,19 @@ amount converted into other currencies. Also works in inline mode.
   - `exchange_rates_manager.py` — rates from apilayer + on-disk cache
   - `statistics_manager.py` — usage counters + optional InfluxDB reporting
   - `user_settings_manager.py` — per-user / per-chat currency lists
+  - `storage.py` — sqlite key-value store under both managers, plus the one-shot
+    import of the pickleDB-era JSON files
 - `tests/` — pytest (`stubs.py` holds the shared test doubles; `conftest.py` only sets
   the required ENV vars before `src.settings` is imported)
 - `data/` — runtime state (gitignored, mounted as a docker volume)
 - `main.py` — thin entry point over `src/`
 
 ## Setup
+**Python 3.11+ is required.** `src/currency_parser.py` relies on possessive quantifiers
+(`\d{1,3}+`, `\d++`), which `re` only supports from 3.11 — on 3.10 the module raises
+`re.error` at import time, before any test runs. Dockerfile and CI both use 3.11; if
+`make install` picks up an older system `python3`, that is the cause.
+
 All routine actions go through the `Makefile` — run `make help` to list targets.
 ```bash
 make install           # create .venv and install dev/test deps
@@ -55,6 +62,9 @@ make run               # runs .venv/bin/python main.py
   extend a target instead of running ad-hoc commands.
 - Python always runs inside a local `.venv`, created automatically by `make` on
   first use (`make test` / `make run` bootstrap it) — never the system Python.
+- Minimum Python is **3.11** (see Setup): the parser's possessive quantifiers are a
+  3.11 `re` feature, so anything older fails at import. Do not lower it in the
+  Dockerfile or CI without rewriting `self.number` in `src/currency_parser.py`.
 - Tests are required for new code; in CI `build` depends on `test`.
 - No `EXPOSE` in the Dockerfile — the bot polls Telegram and has no inbound port.
 - The container runs as non-root user `app` (uid 1000) — the entrypoint starts as

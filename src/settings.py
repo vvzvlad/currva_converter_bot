@@ -16,9 +16,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # All mutable state lives under data/ (mounted as a docker volume).
+    # The two *_db_path files are sqlite databases; on first start each one
+    # imports the same-named .json left behind by the pickleDB era.
     exchange_rates_cache_path: str = "data/exchange_rates_cache.json"
-    statistics_db_path: str = "data/statistics.json"
-    user_settings_db_path: str = "data/user_settings.json"
+    statistics_db_path: str = "data/statistics.db"
+    user_settings_db_path: str = "data/user_settings.db"
 
     # Optional InfluxDB metrics: reporting stays disabled while influx_version is unset.
     influx_version: str | None = None
@@ -47,6 +49,30 @@ class Settings(BaseSettings):
         if normalised not in allowed:
             raise ValueError(f"must be one of: {', '.join(sorted(allowed))}")
         return normalised
+
+    @field_validator("statistics_db_path", "user_settings_db_path")
+    @classmethod
+    def _reject_json_db_path(cls, value: str) -> str:
+        """Refuse the pre-migration defaults, which were *.json files.
+
+        A deployment that pinned `STATISTICS_DB_PATH=data/statistics.json` in its
+        compose file or .env keeps working until this image is rolled out, and then
+        sqlite opens the JSON file and dies with `DatabaseError: file is not a
+        database` on every start — an endless crash-loop under `restart: always`,
+        with nothing in the message pointing at the variable. Raising here routes
+        it through load_settings_or_exit, which names the variable instead.
+        """
+        cleaned = value.strip()
+        if cleaned.lower().endswith(".json"):
+            raise ValueError(
+                "must point at a sqlite database file (e.g. data/statistics.db), not a .json file; "
+                "the old .json store sitting next to it is imported automatically on first start"
+            )
+        # The stripped value, not the original: `data/statistics.db ` with a trailing
+        # space (trivial to end up with in YAML or a .env line) passes the check above
+        # and would then create a file whose name really does end in a space. Same
+        # normalise-then-return shape as _normalise_log_level.
+        return cleaned
 
 
 settings = load_settings_or_exit(Settings)

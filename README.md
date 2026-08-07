@@ -23,6 +23,11 @@ are shown.
 
 ## Quick start
 
+**Python 3.11 or newer is required.** The amount regex in `src/currency_parser.py` uses
+possessive quantifiers (`\d{1,3}+`, `\d++`) to keep the scan linear; `re` gained them in
+3.11, so on 3.10 the module fails with a `re.error` at import time. The Dockerfile and CI
+are on 3.11 — check your `python3 --version` before `make install` if you run it locally.
+
 Everything routine is wrapped in the `Makefile` (`make help` lists all targets):
 
 ```bash
@@ -44,6 +49,7 @@ automatically — you never need the system Python.
 | `src/settings.py` | All config, read from ENV / `.env`. |
 | `src/currencies.py` | The currency reference book — single source of truth for parser and formatter. |
 | `src/bot.py` | Telegram handlers, inline mode, `/currencies`, `/stats`. |
+| `src/storage.py` | sqlite key-value store behind the statistics and user-settings managers. |
 | `tests/` | pytest suite (runs in CI before the image is built). |
 | `data/` | Runtime state: rates cache, statistics, user settings. Gitignored, mounted as a volume. |
 | `Dockerfile` | Slim single-stage build; no `EXPOSE`; privileges dropped by `entrypoint.sh`. |
@@ -63,8 +69,8 @@ All configuration comes from environment variables (or a local `.env`, see `.env
 | `ADMIN_USER_ID` | yes | — | Telegram user id allowed to run `/stats`. |
 | `LOG_LEVEL` | no | `INFO` | `CRITICAL`/`ERROR`/`WARNING`/`INFO`/`DEBUG`, case-insensitive. `DEBUG` only affects the bot's own logging: the HTTP client loggers are clamped to `max(INFO, LOG_LEVEL)` on purpose, so `DEBUG` does not turn on request logging and the bot token does not reach the log through the loggers. An uncaught exception can still print a traceback containing the full request URL to stderr. |
 | `EXCHANGE_RATES_CACHE_PATH` | no | `data/exchange_rates_cache.json` | Rates cache file. Rarely worth changing. |
-| `STATISTICS_DB_PATH` | no | `data/statistics.json` | Statistics file. Rarely worth changing. |
-| `USER_SETTINGS_DB_PATH` | no | `data/user_settings.json` | Per-user/chat settings file. Rarely worth changing. |
+| `STATISTICS_DB_PATH` | no | `data/statistics.db` | Statistics sqlite database. Rarely worth changing. |
+| `USER_SETTINGS_DB_PATH` | no | `data/user_settings.db` | Per-user/chat settings sqlite database. Rarely worth changing. |
 | `INFLUX_VERSION` | no | — | `2` or `1.8`. Unset → metrics reporting disabled. |
 | `INFLUX_URL` | for metrics | — | InfluxDB server URL. |
 | `INFLUX_TOPIC` | for metrics | — | Measurement name, e.g. `bots/currva_converter_bot`. |
@@ -81,6 +87,46 @@ A missing required variable fails the bot at startup with a message naming the v
 The three `*_PATH` variables are relative to the working directory — which is `/app` in the
 container and the repository root under `make run`, so the defaults resolve to the `data/`
 volume in both cases. There is normally no reason to override them.
+
+## State storage
+
+Statistics and user/chat settings live in two sqlite databases (`data/statistics.db`,
+`data/user_settings.db`), handled by `src/storage.py` — a small key-value layer over the
+stdlib `sqlite3`, in WAL mode. Telegram handlers run on a thread pool, and sqlite gives
+atomic commits and a proper write lock, so concurrent writes cannot corrupt the state the
+way the previous JSON-dump storage could. Each database also creates a `-wal` and a `-shm`
+file next to it — keep them together with the `.db`. The rates cache stays a plain JSON
+file: it is a disposable cache, rewritten wholesale twice a day.
+
+On first start each database performs a **one-shot import** of the same-named JSON file
+from the previous storage (`data/statistics.json` → `data/statistics.db`), then renames the
+original to `<name>.json.migrated` so a rollback is still possible.
+
+The import runs when the database holds no rows **and** the JSON file is still under its
+original name — not merely when the `.db` file is missing, because the file exists from the
+moment sqlite opens it. That makes the import both non-repeating and self-healing: once
+anything is imported or written the database is no longer empty, so a restart cannot import
+twice; and if the import fails, nothing is written and nothing is renamed, so the next start
+simply tries again. An unreadable or invalid JSON file therefore does not stop the bot: the
+failure is logged and the bot starts empty.
+
+**The retry window closes with the first write to the database, not with the restart.** A
+single message the bot handles is enough — it bumps the request counters — so "fix the JSON
+and restart" only imports the file if the bot has answered nothing in between. Once the
+database holds rows the import is skipped, and the start logs a `WARNING` naming the legacy
+file that was left behind; importing it then means stopping the bot, moving the `.db` (plus
+its `-wal`/`-shm`) aside and starting again. Deleting every setting from the bot does not
+resurrect them either: the archive is only ever looked for under the original name, never
+under `*.json.migrated`.
+
+The legacy name is derived from the database path (`data/statistics.db` →
+`data/statistics.json`), so a custom database name looks for a matching custom JSON name.
+The path being searched is logged at `INFO` on every start that finds an empty database.
+
+The `*_DB_PATH` settings must point at a database file, not at the old `*.json` one: a
+`.json` path is rejected at startup with a message naming the variable, and any other file
+that is not a sqlite database fails with an explicit error instead of sqlite's `file is not
+a database`.
 
 ## Start with Docker Compose
 

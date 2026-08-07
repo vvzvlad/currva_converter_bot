@@ -380,12 +380,49 @@ class CodeChangeHandler(FileSystemEventHandler):
                     logger.error(f"Failed to restart bot: {e}")
 
 
+def close_storage():
+    """Close both sqlite connections on the way out.
+
+    Nothing is lost without this — WAL plus committed transactions already survive
+    a kill — but an unclosed database leaves its `-wal` file uncheckpointed, so it
+    keeps growing across every restart until something opens the file again.
+
+    Deliberately forgiving: the managers are module-level and may be missing or
+    half-built if an import failed, and a failure to close must never be the reason
+    the process refuses to exit. Safe to call twice — closing an already closed
+    connection is what happens on the signal path, where SystemExit also unwinds
+    through main()'s finally.
+
+    Goes through each manager's public close(), which also stops whatever background
+    work it owns (StatisticsManager sets its reporting-thread stop flag before the
+    connection disappears). Reaching into a private `_db` would be a silent no-op the
+    day that attribute is renamed, and the `-wal` growth this exists to prevent would
+    come back unnoticed.
+
+    Latent hazard, harmless today: KeyValueStore.close() takes a non-reentrant lock,
+    and this runs from a signal handler, i.e. on the MAIN thread. TeleBot is created
+    with threaded=True (the default), so handlers — and therefore set_many — only ever
+    run on worker threads and the main thread is never already holding that lock.
+    Switch the bot to threaded=False and a Ctrl+C landing mid-write deadlocks the
+    shutdown forever.
+    """
+    for name in ("statistics_manager", "user_settings_manager"):
+        manager = globals().get(name)
+        if manager is None:
+            continue
+        try:
+            manager.close()
+        except Exception as e:
+            logger.warning(f"Failed to close {name} storage: {e}")
+
+
 def signal_handler(_signum, _frame):
     """Handle Ctrl+C signal"""
     logger.info("Received shutdown signal, stopping...")
     if OBSERVER:
         OBSERVER.stop()
         OBSERVER.join()
+    close_storage()
     sys.exit(0)
 
 
@@ -415,6 +452,7 @@ def main():
     finally:
         OBSERVER.stop()
         OBSERVER.join()
+        close_storage()
         logger.info("Bot stopped")
 
 

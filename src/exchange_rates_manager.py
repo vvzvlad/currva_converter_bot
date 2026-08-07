@@ -28,6 +28,11 @@ UPDATES_INTERVAL = 12 * 60 * 60  # 12 hours
 class ExchangeRatesManager:
     def __init__(self, cache_file: str = settings.exchange_rates_cache_path):
         self._cache_file = Path(cache_file)
+        # This manager is constructed first of the three, so on a clean volume
+        # nobody has created data/ yet and the first _save_cache() would die with
+        # FileNotFoundError — silently, since it only logs. The cache would never
+        # be written and every restart would burn another paid API request.
+        self._cache_file.parent.mkdir(parents=True, exist_ok=True)
         self._rates: Dict = {}
         self._last_update: Optional[datetime] = None
         self._lock = threading.Lock()

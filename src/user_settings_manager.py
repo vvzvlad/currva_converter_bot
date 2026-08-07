@@ -9,9 +9,8 @@ from pathlib import Path
 import time
 import os
 
-import pickledb
-
 from src.settings import settings
+from src.storage import KeyValueStore
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,19 +23,25 @@ logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 class UserSettingsManager:
     def __init__(self, db_file: str = settings.user_settings_db_path):
         self._db_file = Path(db_file)
-        self._db_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        self._db = pickledb.load(str(self._db_file), auto_dump=True)
+        # No manager-level lock here: every method is a single storage call, and
+        # KeyValueStore already serialises those. The one read-then-write pair
+        # (is_chat_disabled cleaning up an expired key) is idempotent, so a race
+        # there costs nothing.
+        self._db = KeyValueStore(str(self._db_file))
         logger.info("User settings manager initialized")
+
+    def close(self) -> None:
+        """Close the underlying store. Public on purpose — see bot.close_storage."""
+        self._db.close()
 
     def get_currencies(self, entity_id: int, is_chat: bool = False) -> Optional[List[str]]:
         """Get list of currencies for user or chat"""
         prefix = "chat" if is_chat else "user"
         key = f"{prefix}:{entity_id}:currencies"
-        if self._db.exists(key):
-            currencies = self._db.get(key)
-            return list(currencies) if currencies else None
-        return None
+        # One lookup instead of exists()+get(): a missing key and a stored empty
+        # list both yield None, exactly as before.
+        currencies = self._db.get(key)
+        return list(currencies) if currencies else None
 
     def set_currencies(self, entity_id: int, currencies: List[str], is_chat: bool = False) -> None:
         """Set list of currencies for user or chat"""
@@ -48,13 +53,13 @@ class UserSettingsManager:
     def is_chat_disabled(self, chat_id: int) -> bool:
         """Check if chat is currently disabled"""
         key = f"chat:{chat_id}:disabled_until"
-        if not self._db.exists(key):
-            return False
-            
         disabled_until = self._db.get(key)
+        if disabled_until is None:
+            return False
+
         if disabled_until > time.time():
             return True
-            
+
         # Clean up expired state
         self._db.rem(key)
         return False
