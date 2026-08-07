@@ -14,7 +14,11 @@ from pydantic import ValidationError
 T = TypeVar("T")
 
 
-def load_settings_or_exit(factory: Callable[[], T]) -> T:
+# Callable[..., T] rather than Callable[[], T]: a BaseSettings subclass is passed as the
+# factory, and pydantic gives it an __init__ with one required keyword per field, so a
+# strict zero-argument signature makes type checkers reject the intended call. It is
+# always invoked with no arguments — every value comes from the environment.
+def load_settings_or_exit(factory: Callable[..., T]) -> T:
     """Build a settings object via `factory` (e.g. a BaseSettings subclass).
 
     On a configuration ValidationError, print a clear message that names the
