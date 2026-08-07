@@ -516,7 +516,13 @@ def send_statistics(message):
 @bot.inline_handler(lambda query: len(query.query) > 0)
 def handle_inline_query(query):
     try:
-        found_currencies = currency_parser.find_currencies(query.query)
+        # With the positions, not just the triples: the "Дополняй" result below splices
+        # the conversions into the original text and needs to know where each match was.
+        found_matches = currency_parser.find_currency_matches(query.query)
+        # m[:3] rather than naming the fields: CurrencyMatch orders them so that the
+        # first three are exactly what find_currencies returns, and this stays true
+        # if the field order ever changes.
+        found_currencies = [m[:3] for m in found_matches]
         if not found_currencies:
             results = [
                 types.InlineQueryResultArticle(
@@ -556,16 +562,33 @@ def handle_inline_query(query):
         if not converted_text:
             return
 
-        # Create modified message with replacements
-        modified_text_inline = query.query
-        for amount, curr, original in reversed(found_currencies):
-            conversion = currency_formatter.format_conversion(
-                (amount, curr, original), 
-                rates, 
+        # Create modified message with replacements.
+        #
+        # Assembled from slices of the original text, NOT by str.replace(original, ...):
+        # replace() rewrites every equal substring, while the loop walks the matches one
+        # by one, so each occurrence was converted as many times as it occurred ("дай
+        # 100$ и еще 100$" came back with both amounts carrying two conversion blocks).
+        # Worse, the replacement text is part of the string the next pass searches: in
+        # "взял 1100$ и 100$" the pass for "100$" fired inside the conversion already
+        # inserted for "1100$" and cut a foreign block into the middle of it.
+        #
+        # find_currency_matches() returns non-overlapping matches ordered by position, so
+        # copying "gap, conversion, gap, conversion, ..., tail" visits every character of
+        # the query exactly once: each match gets exactly its own conversion, the text
+        # between matches is carried over verbatim, and inserted text is never rescanned.
+        pieces = []
+        cursor = 0
+        for found in found_matches:
+            pieces.append(query.query[cursor:found.start])
+            pieces.append(currency_formatter.format_conversion(
+                (found.amount, found.currency_code, found.original_text),
+                rates,
                 mode='inline',
                 user_currencies=user_currencies
-            )
-            modified_text_inline = modified_text_inline.replace(original, conversion)
+            ))
+            cursor = found.end
+        pieces.append(query.query[cursor:])
+        modified_text_inline = "".join(pieces)
 
         results = [
             types.InlineQueryResultArticle(

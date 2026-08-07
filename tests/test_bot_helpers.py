@@ -110,6 +110,16 @@ def _message(**extra):
     return types.Message.de_json(payload)
 
 
+def _inline_query(text):
+    """A real telebot InlineQuery, built from an API payload like _message() is."""
+    return types.InlineQuery.de_json({
+        "id": "inline-1",
+        "from": {"id": 42, "is_bot": False, "first_name": "Tester", "username": "tester"},
+        "query": text,
+        "offset": "",
+    })
+
+
 class LegacyMessage:
     """A message object from a telebot old enough to have no forward_origin at all."""
 
@@ -137,11 +147,12 @@ class RecordingRatesManager:
 
 
 class RecordingBot:
-    """The bits of TeleBot parse_text uses, with the network taken out."""
+    """The bits of TeleBot the handlers use, with the network taken out."""
 
     def __init__(self):
         self.replies = []
         self.sent = []
+        self.answered = []
 
     def reply_to(self, message, text):
         self.replies.append((message, text))
@@ -149,6 +160,10 @@ class RecordingBot:
 
     def send_message(self, chat_id, text):
         self.sent.append((chat_id, text))
+        return None
+
+    def answer_inline_query(self, inline_query_id, results, **kwargs):
+        self.answered.append((inline_query_id, results))
         return None
 
 
@@ -779,6 +794,125 @@ class ParseTextTestCase(unittest.TestCase):
         })
         bot.parse_text(message.text, message)
         self.assertEqual(self.fake_bot.replies, [])
+
+
+class InlineQueryTestCase(unittest.TestCase):
+    """The "Дополняй" result: the user's own text with a conversion after every amount.
+
+    It used to be built with str.replace(original, conversion) once per match, which
+    rewrites EVERY equal substring rather than the match it was called for. Two amounts
+    of the same size therefore got two conversions each, and a shorter amount replaced
+    itself inside the conversion a longer one had already inserted. The text the user
+    then sent into the chat was mangled, so these tests assert on the exact string.
+
+    Every expectation is written as a template — literal gap, conversion, literal gap —
+    so the text between the matches is part of what is checked.
+    """
+
+    def setUp(self):
+        self.fake_bot = RecordingBot()
+        self.rates = RecordingRatesManager()
+        self.statistics = StubStatistics()
+        self.user_settings = StubUserSettings()
+        for patcher in (
+            mock.patch.object(bot, "bot", self.fake_bot),
+            mock.patch.object(bot, "rates_manager", self.rates),
+            mock.patch.object(bot, "statistics_manager", self.statistics),
+            mock.patch.object(bot, "user_settings_manager", self.user_settings),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _complete(self, text):
+        """Run the handler and return the message text of the "Дополняй" result."""
+        with self.assertNoLogs("bot", level="ERROR"):
+            bot.handle_inline_query(_inline_query(text))
+        self.assertEqual(len(self.fake_bot.answered), 1)
+        results = self.fake_bot.answered[0][1]
+        self.assertEqual([result.id for result in results], ["1", "2"])
+        return results[1].input_message_content.message_text
+
+    @staticmethod
+    def _conversion(amount_text):
+        """What the formatter alone produces for a text holding exactly one amount.
+
+        Built through the formatter rather than spelled out, because the wording of a
+        conversion is the formatter's business and is covered by its own tests. What is
+        being tested here is only WHERE those strings end up.
+        """
+        found = bot.currency_parser.find_currencies(amount_text)
+        assert len(found) == 1, amount_text
+        rates = bot._collect_rates(found, None)
+        return bot.currency_formatter.format_conversion(found[0], rates, mode="inline", user_currencies=None)
+
+    def test_two_identical_amounts_are_each_replaced_by_one_conversion(self):
+        conversion = self._conversion("100$")
+        completed = self._complete("дай 100$ и еще 100$")
+
+        self.assertEqual(completed, f"дай {conversion} и еще {conversion}")
+        # The symptom the user saw: "100$ (…) (…)". Counting the blocks catches it even
+        # if the wording of a conversion ever changes.
+        self.assertEqual(completed.count("("), 2 * conversion.count("("))
+        self.assertNotIn(") (", completed)
+
+    def test_a_shorter_amount_is_not_replaced_inside_the_conversion_of_a_longer_one(self):
+        """"100$" is a substring of "1100$" — and of the conversion inserted for it."""
+        completed = self._complete("взял 1100$ и 100$")
+
+        self.assertEqual(completed, f"взял {self._conversion('1100$')} и {self._conversion('100$')}")
+
+    def test_an_amount_at_the_start_of_the_text(self):
+        self.assertEqual(self._complete("100$ и всё"), f"{self._conversion('100$')} и всё")
+
+    def test_an_amount_at_the_end_of_the_text(self):
+        self.assertEqual(self._complete("итого 100$"), f"итого {self._conversion('100$')}")
+
+    def test_the_whole_text_is_one_amount(self):
+        self.assertEqual(self._complete("100$"), self._conversion("100$"))
+
+    def test_a_single_amount_in_the_middle_behaves_as_before(self):
+        completed = self._complete("я купил телевизор за 100 долларов и доволен")
+        self.assertEqual(completed, f"я купил телевизор за {self._conversion('100 долларов')} и доволен")
+
+    def test_text_without_amounts_is_passed_through_untouched(self):
+        text = "просто текст без денег"
+        with self.assertNoLogs("bot", level="ERROR"):
+            bot.handle_inline_query(_inline_query(text))
+
+        results = self.fake_bot.answered[0][1]
+        self.assertEqual([result.input_message_content.message_text for result in results], [text, text])
+
+    def test_everything_outside_the_matches_survives_verbatim(self):
+        """Punctuation, doubled spaces and non-BMP characters, character for character.
+
+        The emoji matter for more than decoration: they are one character each in
+        Python but four bytes, so an offset computed anywhere other than on the string
+        itself would slice the text apart in the wrong place.
+        """
+        text = "💰 цена:  100$,  а не 200 евро!  💶"
+        completed = self._complete(text)
+
+        self.assertEqual(
+            completed,
+            f"💰 цена:  {self._conversion('100$')},  а не {self._conversion('200 евро')}!  💶",
+        )
+
+        # Same claim from the other side, without a template: putting the originals back
+        # in place of the conversions must return the input unchanged.
+        restored = completed
+        for original in ("100$", "200 евро"):
+            restored = restored.replace(self._conversion(original), original, 1)
+        self.assertEqual(restored, text)
+
+    def test_the_conversion_belongs_to_the_amount_it_follows(self):
+        """Different amounts, so a mixed-up assembly cannot pass by accident."""
+        completed = self._complete("сначала 100$, потом 200$, снова 100$")
+
+        self.assertEqual(
+            completed,
+            f"сначала {self._conversion('100$')}, потом {self._conversion('200$')}, "
+            f"снова {self._conversion('100$')}",
+        )
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
 # type: ignore
 
 import re
-from typing import List, Optional, Tuple
+from typing import List, NamedTuple, Optional, Tuple
 import logging
 import os
 
@@ -30,6 +30,27 @@ AMBIGUOUS_CODES = frozenset({'ALL', 'BOB', 'CUP', 'MAD', 'MOP', 'PEN', 'SOS', 'T
 # message and the parser runs on every message in every group chat, so an oversized
 # input must degrade to "no currencies found" instead of burning CPU in the handler.
 MAX_TEXT_LENGTH = 4096
+
+
+class CurrencyMatch(NamedTuple):
+    """One recognised amount together with where it sits in the source text.
+
+    The first three fields are, in this order, exactly the triple find_currencies()
+    has always returned, so `match[:3]` is that triple and everything built on the
+    old shape (the formatter, the rate pre-fetch, the test corpus) keeps working.
+
+    `start`/`end` are offsets into the text that was passed to
+    find_currency_matches(): text[start:end] == original_text. They are what lets a
+    caller rebuild a message by slicing instead of by str.replace(), which replaces
+    every equal substring rather than the one that was actually matched.
+    """
+
+    amount: float
+    currency_code: str
+    original_text: str
+    start: int
+    end: int
+
 
 class CurrencyParser:
     def __init__(self):
@@ -273,11 +294,20 @@ class CurrencyParser:
 
         return amount * multiplier, base_currency
 
-    def find_currencies(self, text: str) -> List[Tuple[float, str, str]]:
-        """Find currencies in text
-        Returns list of tuples: (amount: float, currency_code: str, original_text: str)
+    def find_currency_matches(self, text: str) -> List[CurrencyMatch]:
+        """Find currencies in text, keeping the position of every match.
+
+        This is the whole search: find_currencies() is a projection of it. Two
+        properties hold for the returned list and callers are meant to rely on them:
+        text[m.start:m.end] == m.original_text for every match, and the matches are
+        non-overlapping and sorted by position (the overlap filter below produces
+        both). Together they make the list a complete, ordered cut of the text, so a
+        caller can rebuild the message from slices — which is the only safe way to
+        substitute the matches: str.replace(original, ...) hits every equal substring
+        instead of the one that was matched, and then hits the text it has just
+        inserted as well.
         """
-        result = []
+        result: List[CurrencyMatch] = []
         matches = []
 
         # Only the length is logged: message texts never go into the logs.
@@ -330,10 +360,25 @@ class CurrencyParser:
                     filtered.append(match)
                     current = match
             
-            # Convert to required format
-            result = [(m[2], m[3], m[4]) for m in filtered]
-        
+            # Convert to required format: the working tuples are ordered
+            # (start, end, amount, currency, text), the returned ones are not.
+            result = [CurrencyMatch(m[2], m[3], m[4], m[0], m[1]) for m in filtered]
+
         return result
+
+    def find_currencies(self, text: str) -> List[Tuple[float, str, str]]:
+        """Find currencies in text
+        Returns list of tuples: (amount: float, currency_code: str, original_text: str)
+
+        The positions are dropped here rather than never collected: callers that only
+        format the amounts (the message handler, the formatter) keep the older and
+        smaller shape, while the inline handler asks find_currency_matches() for the
+        same matches with their offsets. One search, two views of it.
+        """
+        return [
+            (match.amount, match.currency_code, match.original_text)
+            for match in self.find_currency_matches(text)
+        ]
 
     def process_currencies(self, text: str) -> List[Tuple[float, str, str]]:
         return self.find_currencies(text)

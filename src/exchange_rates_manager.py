@@ -11,6 +11,7 @@ import math
 import threading
 import os
 import time
+import uuid
 from pathlib import Path
 
 import requests
@@ -66,14 +67,17 @@ API_REQUEST_TIMEOUT = 10
 
 # How far a cached timestamp may sit in the future before it is treated as broken
 # rather than as ordinary jitter. Container clocks and hosts drift by seconds, and an
-# NTP correction lands between the write and the read easily enough; three hours of
-# "future" is a timezone change or a clock that stepped backwards.
+# NTP correction lands between the write and the read easily enough, so five minutes
+# leaves that noise alone; anything beyond it is a timezone change or a clock that
+# stepped backwards, not drift.
 CLOCK_SKEW_TOLERANCE = timedelta(minutes=5)
 
 # Temp files left by a write that never finished are removed at startup if they are at
-# least this old. The age check is what keeps the cleanup from deleting the temp file
-# of ANOTHER process that is writing right now (the file name carries a pid, but pids
-# say nothing about liveness); a real write takes milliseconds.
+# least this old. Age (mtime) is the ONLY filter the cleanup applies — it does not try
+# to tell "our" leftovers from anybody else's, because a temp name is unique per write
+# and says nothing about whether its writer is still alive. The age check is what keeps
+# the cleanup from deleting the temp file of ANOTHER process that is writing right now
+# (two containers can share the data volume); a real write takes milliseconds.
 STALE_TEMP_FILE_AGE = 60
 
 
@@ -167,10 +171,10 @@ class ExchangeRatesManager:
     def _cleanup_stale_temp_files(self) -> None:
         """Delete leftovers of a cache write that never finished.
 
-        _save_cache writes to `<cache>.<pid>.tmp` and only unlinks it on the error
-        path, so a process killed mid-write (SIGKILL, the OOM killer, power loss)
-        leaves roughly a megabyte behind — and the next start runs under a different
-        pid, so nothing would ever pick that file up again.
+        _save_cache writes to `<cache>.<pid>.<random>.tmp` and only unlinks it on the
+        error path, so a process killed mid-write (SIGKILL, the OOM killer, power loss)
+        leaves roughly a megabyte behind — and every write picks a fresh name, so
+        nothing would ever reuse that file.
 
         Files younger than STALE_TEMP_FILE_AGE are left alone: they may belong to
         another process writing right now (two containers can share the data volume),
@@ -178,17 +182,31 @@ class ExchangeRatesManager:
         """
         try:
             cutoff = time.time() - STALE_TEMP_FILE_AGE
-            for leftover in self._cache_file.parent.glob(f"{self._cache_file.name}.*.tmp"):
-                try:
-                    if leftover.stat().st_mtime > cutoff:
-                        continue
-                    leftover.unlink()
-                except FileNotFoundError:
-                    continue
-                logger.info(f"Removed a stale rates cache temp file: {leftover.name}")
+            leftovers = list(self._cache_file.parent.glob(f"{self._cache_file.name}.*.tmp"))
         except OSError as e:
             # Housekeeping must never keep the bot from starting.
-            logger.warning(f"Failed to clean up stale rates cache temp files: {str(e)}")
+            logger.warning(f"Failed to list stale rates cache temp files: {str(e)}")
+            return
+
+        for leftover in leftovers:
+            try:
+                if leftover.stat().st_mtime > cutoff:
+                    continue
+                leftover.unlink()
+            except FileNotFoundError:
+                continue
+            except OSError as e:
+                # One file we may not touch must not cost us the whole sweep: this used
+                # to abort the loop, leaving every other megabyte-sized leftover on the
+                # volume forever. A root-owned temp file is not hypothetical —
+                # entrypoint.sh starts as root and chowns the volume before dropping to
+                # the service user with gosu, so anything written before that (or put
+                # there by hand) stays unwritable for the process that finds it.
+                logger.warning(
+                    f"Failed to remove the stale rates cache temp file {leftover.name}: {str(e)}"
+                )
+                continue
+            logger.info(f"Removed a stale rates cache temp file: {leftover.name}")
 
     def _initialize_rates(self) -> None:
         """Initialize rates from cache file or download new ones"""
@@ -267,14 +285,19 @@ class ExchangeRatesManager:
           - open(path, 'w') truncates the real cache first, so a kill in the middle
             left a half-written file that _load_cache then rejects — the next start
             began with no rates and burned a paid API request.
-        _save_lock serialises two concurrent savers (they would otherwise interleave
-        into the same temp file); it is never held while rates are read, so it cannot
-        put a handler to sleep.
+        _save_lock serialises two concurrent savers, so that the revision check, the
+        write and the os.replace happen as one step and the older snapshot cannot land
+        last; it is never held while rates are read, so it cannot put a handler to sleep.
         """
-        # pid in the name so two processes sharing the data volume cannot clobber
-        # each other's half-written temp file. A file left behind by a process that
-        # died mid-write is removed by _cleanup_stale_temp_files at startup.
-        tmp_path = self._cache_file.with_name(f"{self._cache_file.name}.{os.getpid()}.tmp")
+        # The random suffix is what makes the name unique, so that two writers sharing
+        # the data volume cannot end up in the same temp file and publish the mix.
+        # A pid does NOT give that: every container has its own PID namespace, so two of
+        # them routinely run the same pid — it is kept in the name only as a hint about
+        # who wrote the file. A file left behind by a process that died mid-write is
+        # removed by _cleanup_stale_temp_files at startup, by age.
+        tmp_path = self._cache_file.with_name(
+            f"{self._cache_file.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp"
+        )
         try:
             with self._save_lock:
                 # A slow save that started earlier must not overwrite the newer
@@ -361,6 +384,14 @@ class ExchangeRatesManager:
                 f"Rates timestamp {last_update.isoformat()} is {skew} in the future; "
                 "reporting the age as zero (the clock moved backwards)"
             )
+            # Returned here rather than falling through to the subtraction below. For a
+            # comparable stamp the two are the same answer (a future stamp gives a
+            # negative difference, which max() floors at zero anyway); for one that is
+            # NOT comparable — the aware/naive case _future_skew reports as broken — the
+            # subtraction is exactly the TypeError that helper exists to absorb, and it
+            # would escape through _log_rates_age into the update thread, ending the
+            # update loop for the rest of the process' life.
+            return timedelta(0)
         return max(now - last_update, timedelta(0))
 
     def _log_rates_age(self) -> None:

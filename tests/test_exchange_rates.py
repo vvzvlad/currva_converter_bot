@@ -390,6 +390,20 @@ class TestBrokenCacheTimestamp(RatesTestCase):
         self.assertIsNotNone(skew)
         self.assertGreater(skew, CLOCK_SKEW_TOLERANCE)
 
+    def test_an_uncomparable_timestamp_does_not_make_rates_age_raise(self):
+        """_future_skew absorbs the aware/naive TypeError, but rates_age then subtracted
+        the very same pair itself. The raise escapes through _log_rates_age into the
+        update thread, which has no handler around its loop — one such timestamp ended
+        the periodic updates for the rest of the process' life."""
+        manager = self.make_manager()
+        manager._last_update = datetime.now(timezone.utc)
+
+        with self.assertLogs(LOGGER_NAME, level="WARNING"):
+            self.assertEqual(manager.rates_age(), timedelta(0))
+
+        with self.assertLogs(LOGGER_NAME, level="WARNING"):
+            manager._log_rates_age()
+
     def test_an_unparsable_timestamp_leaves_no_half_loaded_state(self):
         """The cache is rejected AND the update fails, so all three answers have to agree
         on "there are no rates". Serving 0.9 while rates_age() says None means the bot
@@ -408,13 +422,18 @@ class TestBrokenCacheTimestamp(RatesTestCase):
 
 
 class TestTempFileCleanup(RatesTestCase):
-    def test_a_temp_file_left_by_a_killed_process_is_removed_at_startup(self):
-        """The temp name carries the writer's pid, so nothing would ever pick up the
-        ~1 MB file left behind by a SIGKILL in the middle of a write."""
-        leftover = self.tmp_path / f"{self.cache_path.name}.999999.tmp"
+    def _stale(self, suffix):
+        """A leftover old enough for the cleanup to consider it abandoned."""
+        leftover = self.tmp_path / f"{self.cache_path.name}.{suffix}.tmp"
         leftover.write_text('{"rates": {"USD"', encoding="utf-8")
         old = time.time() - 3600
         os.utime(leftover, (old, old))
+        return leftover
+
+    def test_a_temp_file_left_by_a_killed_process_is_removed_at_startup(self):
+        """Every write picks a fresh temp name, so nothing would ever pick up the ~1 MB
+        file left behind by a SIGKILL in the middle of a write."""
+        leftover = self._stale("999999")
 
         self.make_manager()
 
@@ -429,6 +448,88 @@ class TestTempFileCleanup(RatesTestCase):
         self.make_manager()
 
         self.assertTrue(in_flight.exists())
+
+    def test_one_leftover_that_cannot_be_removed_does_not_stop_the_cleanup(self):
+        """A root-owned temp file (entrypoint.sh runs as root and chowns before gosu, so
+        anything written before that stays unwritable) used to abort the whole sweep on
+        the first PermissionError, and every other megabyte stayed on the volume."""
+        blocked = self._stale("111111")
+        others = [self._stale("222222"), self._stale("333333")]
+
+        real_unlink = Path.unlink
+        real_glob = Path.glob
+
+        def refuse_one(path, *args, **kwargs):
+            # The real permissions are left alone: the test has to run as whatever user
+            # invoked it, and root can unlink a root-owned file just fine.
+            if path.name == blocked.name:
+                raise PermissionError(13, "Operation not permitted")
+            return real_unlink(path, *args, **kwargs)
+
+        def blocked_first(path, *args, **kwargs):
+            # Directory order is whatever the filesystem feels like, and the bug only
+            # shows when the unremovable file comes BEFORE the others — pinning the
+            # order is what keeps this test from passing by luck.
+            found = real_glob(path, *args, **kwargs)
+            return iter(sorted(found, key=lambda item: item.name != blocked.name))
+
+        with mock.patch.object(Path, "unlink", refuse_one):
+            with mock.patch.object(Path, "glob", blocked_first):
+                with self.assertLogs(LOGGER_NAME, level="WARNING") as captured:
+                    self.make_manager()
+
+        self.assertTrue(blocked.exists())
+        for leftover in others:
+            self.assertFalse(leftover.exists(), f"{leftover.name} was left behind")
+        self.assertTrue(any(blocked.name in line for line in captured.output))
+
+    def test_two_saves_in_a_row_use_different_temp_file_names(self):
+        """The name must be unique because it is unique, not because two writers are
+        assumed to have different pids — containers have their own PID namespaces, so
+        two of them share pid 1 and a pid-only name is the same name."""
+        manager = self.make_manager()
+        temp_names = self._recorded_temp_names(manager)
+
+        self.assertEqual(len(temp_names), 2)
+        self.assertNotEqual(temp_names[0], temp_names[1])
+
+    def test_the_cleanup_glob_finds_the_name_a_real_save_writes(self):
+        """The uniqueness fix changed the temp name, and the cleanup only ever sees
+        files through its glob: a name the glob misses is a leftover that stays forever."""
+        manager = self.make_manager()
+        temp_name = self._recorded_temp_names(manager)[0]
+        self.assertNotEqual(temp_name, self.cache_path.name)
+
+        leftover = self.tmp_path / temp_name
+        leftover.write_text('{"rates": {"USD"', encoding="utf-8")
+        old = time.time() - 3600
+        os.utime(leftover, (old, old))
+
+        self.make_manager()
+
+        self.assertFalse(leftover.exists())
+
+    def _recorded_temp_names(self, manager):
+        """Names of the temp files two consecutive real saves write.
+
+        os.replace is the last thing _save_cache does with the temp file, so watching it
+        reports the name that was actually used instead of recomputing it here.
+        """
+        recorded = []
+        real_replace = os.replace
+
+        def record(src, dst):
+            recorded.append(Path(src).name)
+            return real_replace(src, dst)
+
+        with mock.patch.object(os, "replace", side_effect=record):
+            for index in (1, 2):
+                manager._save_cache(
+                    {"USD": {"EUR": float(index)}},
+                    datetime.now(),
+                    manager._rates_revision + index,
+                )
+        return recorded
 
 
 if __name__ == "__main__":

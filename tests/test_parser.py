@@ -7,7 +7,7 @@ import time
 import unittest
 
 from src.currencies import CURRENCIES
-from src.currency_parser import AMBIGUOUS_CODES, MAX_TEXT_LENGTH
+from src.currency_parser import AMBIGUOUS_CODES, MAX_TEXT_LENGTH, CurrencyMatch
 
 from tests.stubs import StubCurrencyParser
 
@@ -913,3 +913,99 @@ class TestCurrencyParsing(unittest.TestCase):
         self.assertEqual(self.parser.find_currencies("0 рублей"), [(0.0, "RUB", "0 рублей")])
         self.assertEqual(self.parser.find_currencies("0,00 долларов"), [(0.0, "USD", "0,00 долларов")])
         self.assertEqual(self.parser.find_currencies("0.5 USD"), [(0.5, "USD", "0.5 USD")])
+
+
+class TestMatchPositions(unittest.TestCase):
+    """find_currency_matches() — the same search, with the offsets kept.
+
+    The inline handler splices its conversions into the message by these offsets, so
+    the property that has to hold is text[start:end] == original_text, for every match
+    of every text. Checked as a property over a corpus rather than as hand-counted
+    numbers: hand-counted offsets only prove the parser agrees with whoever counted.
+    """
+
+    # Deliberately includes the two texts that broke the old str.replace() assembly, a
+    # symbol-prefixed amount (the match starts before the digits), an amount whose group
+    # is empty ("килобаксов"), amounts with spaces inside them, non-BMP characters ahead
+    # of a match (positions are character offsets, and an emoji is one character here but
+    # four bytes), and texts with no amounts at all.
+    CORPUS = [
+        "дай 100$ и еще 100$",
+        "взял 1100$ и 100$",
+        "100$",
+        "100 долларов в начале",
+        "в конце 100 долларов",
+        "цена:  100$,  а не 200$!",
+        "💰 100$ и 💶 100 евро",
+        "£800 и 700£ и €50",
+        "5 килобаксов",
+        "1 000 000 рублей и 2,5к евро",
+        "ничего тут нет",
+        "3 top и 5 mad — не валюты",
+        "100500 CAD вышло",
+    ]
+
+    def setUp(self):
+        self.parser = StubCurrencyParser()
+
+    def test_every_match_points_at_its_own_text(self):
+        for text in self.CORPUS:
+            for match in self.parser.find_currency_matches(text):
+                with self.subTest(text=text, match=match):
+                    self.assertIsInstance(match, CurrencyMatch)
+                    self.assertEqual(text[match.start:match.end], match.original_text)
+
+    def test_matches_are_ordered_and_never_overlap(self):
+        """What makes a left-to-right rebuild of the text possible at all."""
+        for text in self.CORPUS:
+            with self.subTest(text=text):
+                previous_end = 0
+                for match in self.parser.find_currency_matches(text):
+                    self.assertGreaterEqual(match.start, previous_end)
+                    self.assertGreater(match.end, match.start)
+                    previous_end = match.end
+                self.assertLessEqual(previous_end, len(text))
+
+    def test_the_gaps_and_the_matches_rebuild_the_original_text(self):
+        """The matches are a complete cut of the text, not a subset of it.
+
+        This is exactly the assembly the inline handler does, with the conversions
+        left out: if it does not reproduce the input, it cannot preserve it either.
+        """
+        for text in self.CORPUS:
+            with self.subTest(text=text):
+                pieces = []
+                cursor = 0
+                for match in self.parser.find_currency_matches(text):
+                    pieces.append(text[cursor:match.start])
+                    pieces.append(match.original_text)
+                    cursor = match.end
+                pieces.append(text[cursor:])
+                self.assertEqual("".join(pieces), text)
+
+    def test_find_currencies_is_the_same_search_without_the_positions(self):
+        for text in self.CORPUS:
+            with self.subTest(text=text):
+                matches = self.parser.find_currency_matches(text)
+                self.assertEqual(self.parser.find_currencies(text), [match[:3] for match in matches])
+
+    def test_two_identical_amounts_are_two_matches_at_different_places(self):
+        """The triples are equal, and that is precisely why the positions are needed."""
+        matches = self.parser.find_currency_matches("дай 100$ и еще 100$")
+        self.assertEqual(len(matches), 2)
+        first, second = matches
+        self.assertEqual(first[:3], second[:3])
+        self.assertNotEqual((first.start, first.end), (second.start, second.end))
+        self.assertEqual((first.start, first.end), (4, 8))
+        self.assertEqual((second.start, second.end), (15, 19))
+
+    def test_a_shorter_amount_inside_a_longer_one_is_not_a_match_of_its_own(self):
+        """"100$" occurs inside "1100$" as a substring, but not as a match."""
+        matches = self.parser.find_currency_matches("взял 1100$ и 100$")
+        self.assertEqual([match.original_text for match in matches], ["1100$", "100$"])
+        self.assertEqual([(match.start, match.end) for match in matches], [(5, 10), (13, 17)])
+
+    def test_text_longer_than_the_limit_has_no_matches_either(self):
+        over_limit = "а" * MAX_TEXT_LENGTH + " 100 рублей"
+        with self.assertLogs("currency_parser", level="WARNING"):
+            self.assertEqual(self.parser.find_currency_matches(over_limit), [])
