@@ -171,7 +171,24 @@ class CurrencyParser:
             ('TJS',     fr'{self.number}\s*(?:сомони|tjs|TJS)\b'),
 
             # Uzbekistani so'm (sum) and som (user requested mapping to UZS)
-            ('UZS',     fr'{self.number}\s*(?:сум(?:ов|а|)|сом(?:ов|а|)|uzs|UZS)\b')
+            ('UZS',     fr'{self.number}\s*(?:сум(?:ов|а|)|сом(?:ов|а|)|uzs|UZS)\b'),
+
+            # Brazilian real. The adjective branch comes first for readability only:
+            # the branches start with disjoint prefixes ("бразильск" vs "реал"), so
+            # their order cannot affect matching. Including "BRL" here makes
+            # _already_matched() drop the generated ISO fallback for BRL, so this
+            # pattern REPLACES it — under IGNORECASE the code now matches in any case
+            # ("brl", "Brl"), a deliberate widening of the strictly case-sensitive
+            # fallback ("brl" is not an English word). "риал"/"риял" (SAR/IRR/QAR)
+            # are different words and are NOT matched.
+            # Known trade-off: "Реал" the football club is indistinguishable from the
+            # currency under IGNORECASE — same compromise as "5 вон" (KRW) or "5 лей"
+            # (MDL). The (?!-\w) guard on the bare form removes only the hyphenated
+            # spelling ("5 реал-мадрид"); "3 Реал Мадрид" and "Барселона 3:1 Реал"
+            # still parse as BRL. The guard also drops any hyphenated continuation
+            # after the bare form ("5 реалов-то", "5 реалов-2024" — digits are \w) —
+            # accepted; the adjective form ("бразильских реалов-то") still matches.
+            ('BRL',     fr'{self.number}\s*(?:бразильск(?:их|ого|ий) реал(?:ов|а|)|реал(?:ов|а|)(?!-\w)|brl|BRL)\b'),
         ]
 
         # Codes whose hand-written pattern already matches the bare "<amount> <CODE>"

@@ -297,6 +297,42 @@ ARS_CASES = [
 ]
 
 
+# Brazilian real. "риал"/"риял" (SAR/IRR/QAR) are different currencies with
+# different Russian spellings and must stay unmatched.
+BRL_CASES = [
+    ("232 реала", [(232.0, "BRL", "232 реала")]),
+    ("1 реал", [(1.0, "BRL", "1 реал")]),
+    ("5 реалов", [(5.0, "BRL", "5 реалов")]),
+    ("100 бразильских реалов", [(100.0, "BRL", "100 бразильских реалов")]),
+    ("1 бразильский реал", [(1.0, "BRL", "1 бразильский реал")]),
+    ("232 бразильского реала", [(232.0, "BRL", "232 бразильского реала")]),
+    ("100 brl", [(100.0, "BRL", "100 brl")]),
+    ("100 BRL", [(100.0, "BRL", "100 BRL")]),
+    # The hand-written pattern replaces the case-sensitive ISO fallback,
+    # so mixed case matches too.
+    ("100 Brl", [(100.0, "BRL", "100 Brl")]),
+    ("5к реалов", [(5000.0, "BRL", "5к реалов")]),
+    # Suffix boundary: words that merely start with "реал" stay plain text.
+    ("5 реально дорого", []),
+    ("5 реалити шоу", []),
+    # Hyphenated compound is the football club, not a currency; the particle
+    # "-то" after the bare form is a known casualty of the same guard.
+    ("5 реал-мадрид", []),
+    ("3 Реал-Мадрид", []),
+    ("232 реала-то", []),
+    ("5 реалов-2024", []),  # digits are \w, so the guard rejects this too
+    ("100 бразильских реалов-то", [(100.0, "BRL", "100 бразильских реалов")]),
+    # Documented trade-off: without a hyphen the club is indistinguishable
+    # from the currency (same as "5 вон" / "5 лей").
+    ("Барселона 3 Реал 1", [(3.0, "BRL", "3 Реал")]),
+    ("Барселона 3:1 Реал", [(1.0, "BRL", "1 Реал")]),
+    # Case-insensitive Russian forms, like every other name pattern.
+    ("5 РЕАЛОВ", [(5.0, "BRL", "5 РЕАЛОВ")]),
+    ("5 нереалов", []),
+    ("10 риалов", []),
+]
+
+
 @pytest.mark.parametrize("text,expected", AMD_CASES)
 def test_amd(parser, text, expected):
     assert parser.find_currencies(text) == expected
@@ -439,4 +475,9 @@ def test_php(parser, text, expected):
 
 @pytest.mark.parametrize("text,expected", ARS_CASES)
 def test_ars(parser, text, expected):
+    assert parser.find_currencies(text) == expected
+
+
+@pytest.mark.parametrize("text,expected", BRL_CASES)
+def test_brl(parser, text, expected):
     assert parser.find_currencies(text) == expected

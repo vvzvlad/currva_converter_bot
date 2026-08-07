@@ -10,6 +10,10 @@ parses without a hand-written regex. Two rules make that safe, and both are pinn
 here: the codes that are ordinary English words are skipped altogether
 (AMBIGUOUS_CODES), and the generated pattern is deliberately case-SENSITIVE, so a
 lowercase "3 top" or "5 mad max" stays plain text while "7666777 KWD" is an amount.
+A hand-written pattern that itself matches "1 <CODE>" replaces the generated
+fallback for that code entirely (_already_matched), and such codes then match
+case-INsensitively — true for most hand-written currencies, whose patterns
+embed their own code (USD, RUB, KRW, ...; see e.g. BRL_CASES in test_names.py).
 """
 
 import pytest
