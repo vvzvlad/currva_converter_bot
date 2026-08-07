@@ -3,10 +3,11 @@
 # pylance: disable=reportMissingImports, reportMissingModuleSource, reportGeneralTypeIssues
 # type: ignore
 
+import time
 import unittest
 
 from src.currencies import CURRENCIES
-from src.currency_parser import AMBIGUOUS_CODES
+from src.currency_parser import AMBIGUOUS_CODES, MAX_TEXT_LENGTH
 
 from tests.stubs import StubCurrencyParser
 
@@ -721,3 +722,163 @@ class TestCurrencyParsing(unittest.TestCase):
         
         # Тест из примера
         test("https://open.spotify.com/track/3cfgisz6DhZmooQk08P4Eu", [])
+
+    def test_amount_shapes_that_need_backtracking(self):
+        """Amount shapes that pin down how much the amount regex may consume.
+
+        These are the cases that break if the repeats in the amount pattern are made
+        possessive without thinking: each of them only parses because the engine is
+        still allowed to hand something back. Kept as an explicit guard so a future
+        performance tweak cannot quietly change what the bot recognises.
+        """
+        def test(text, expected):
+            self.assertEqual(self.parser.find_currencies(text), expected, text)
+
+        # A fourth decimal digit means the separator was never a thousands separator:
+        # "1.2345" is one number, not "1.234" followed by a stray "5".
+        test("1.2345 евро", [(1.2345, "EUR", "1.2345 евро")])
+        test("1.234 евро", [(1.234, "EUR", "1.234 евро")])
+
+        # The "$<amount>" pattern ends in \b, so a letter glued to the digits forces
+        # the amount to stop one thousands group earlier.
+        test("$1 000 000", [(1000000.0, "USD", "$1 000 000")])
+        test("$1 000 000abc", [(1000.0, "USD", "$1 000")])
+
+        # The "к" suffix has to be given back when the currency name itself starts
+        # with "к" and there is no space in between.
+        test("5крон", [(5.0, "CZK", "5крон")])
+        test("5килобаксов", [(5000.0, "USD", "5килобаксов")])
+        test("5к баксов", [(5000.0, "USD", "5к баксов")])
+        test("10 000к рублей", [(10000000.0, "RUB", "10 000к рублей")])
+
+        # Long amounts stay unbounded: the plain-integer branch has no digit limit.
+        test("12345678901234567890 USD", [(1.2345678901234567e+19, "USD", "12345678901234567890 USD")])
+        test("1 000 000 000 000 донгов", [(1000000000000.0, "VND", "1 000 000 000 000 донгов")])
+
+        # Mixed separators, both orders.
+        test("1.234,56 евро", [(1234.56, "EUR", "1.234,56 евро")])
+        test("1,234.56 usd", [(1234.56, "USD", "1,234.56 usd")])
+        test("1 000 000,50 евро", [(1000000.5, "EUR", "1 000 000,50 евро")])
+
+        # A number right after another number: nothing is glued together.
+        test("100 500 долларов", [(100500.0, "USD", "100 500 долларов")])
+        test("1 000 200", [])
+        test("10 000₽", [(10000.0, "RUB", "10 000₽")])
+
+    def test_amounts_past_seven_thousands_groups_are_not_specified(self):
+        """Pins what actually happens beyond the `{0,6}` bound in the amount regex.
+
+        The repeat over thousands groups is capped at six because the separator class
+        contains a space: unbounded, a run of digit groups is re-scanned from every
+        start position, which is the quadratic blow-up the test below guards. Six
+        groups after the leading one to three digits reach 10^18 — orders of magnitude
+        past any amount a chat message can mean, so the cap costs nothing real.
+
+        Past the cap the result depends on the separator, and that is deliberately NOT
+        made consistent: capping cheaply is the point, and no reachable input cares.
+        These assertions exist so the behaviour is a recorded decision — if a future
+        change to the bound moves them, that is fine, but it has to be noticed.
+        """
+        def parsed(text):
+            return self.parser.find_currencies(text)
+
+        # Space separator: the amount cannot reach the currency word from the start of
+        # the number, so the match slides right and starts on a group of zeroes.
+        self.assertEqual(
+            parsed("1 000 000 000 000 000 000 000 рублей"),
+            [(0.0, "RUB", "000 000 000 000 000 000 000 рублей")])
+
+        # Symbol prefix, space separator: the match simply stops at the sixth group.
+        self.assertEqual(
+            parsed("€1 000 000 000 000 000 000 000"),
+            [(1e18, "EUR", "€1 000 000 000 000 000 000")])
+
+        # Comma separator: not truncated at all. The seventh group is consumed by the
+        # decimal tail `(?:[.,]\d+)?`, and the amount normaliser folds it back in.
+        self.assertEqual(
+            parsed("1,000,000,000,000,000,000,000 USD"),
+            [(1e21, "USD", "1,000,000,000,000,000,000,000 USD")])
+
+        # Right at the bound everything still behaves normally, whatever the separator.
+        self.assertEqual(
+            parsed("1 000 000 000 000 000 000 рублей"),
+            [(1e18, "RUB", "1 000 000 000 000 000 000 рублей")])
+
+    def test_parsing_time_scales_linearly_with_text_length(self):
+        """Regression guard for the catastrophic backtracking in the amount regex.
+
+        The thousands-separator class contains a space, so on a run of digit groups
+        ("123 456 789 123 ...") the old unbounded repeat swallowed the whole tail from
+        every start position and then handed it back group by group — quadratic in the
+        length of the text, times ~170 patterns. Measured before the fix: 0.6 s at 500
+        characters, 2.5 s at 1000, 7 s at 1600, ~20-33 s at the 4096-character Telegram
+        limit. `re` does not release the GIL, so that froze the whole process — polling,
+        both telebot workers and the metrics thread — which made a single chat message a
+        remote denial of service, reachable by accident with a pasted CSV column too.
+
+        The assertion is on the SHAPE of the curve, not on a wall-clock threshold: an
+        absolute limit tuned on a developer machine says nothing on a loaded shared CI
+        runner. Doubling the input doubles the work when the scan is linear (~2.0
+        measured) and quadruples it when it is not, so a ratio under 3 separates the two
+        regardless of how fast or how busy the machine is. Each length is measured
+        several times and the FASTEST run is kept — a scheduling hiccup can only make a
+        run slower, so the minimum is the least noisy estimate available.
+        """
+        def fastest_run(length):
+            text = ('123 456 789 ' * 400)[:length]
+            self.assertEqual(len(text), length)
+            return min(self._time_parse(text) for _ in range(5))
+
+        self.parser.find_currencies('123 456 789 ' * 10)  # warm up the compiled patterns
+
+        half = MAX_TEXT_LENGTH // 2
+
+        # Short circuit on a SINGLE run before measuring the curve. The ratio above is
+        # the real assertion, but reaching it costs ten parses, and if the regression is
+        # back each of them takes ~10 s: the test would fail after ~3.5 minutes, which on
+        # CI looks like a job killed by a timeout rather than like a failed assert. One
+        # linear pass over half the Telegram limit is ~0.2 s here, so the budget below
+        # leaves an order of magnitude for a loaded shared runner and still trips on the
+        # quadratic version, which needs seconds for this very first run.
+        probe = self._time_parse(('123 456 789 ' * 400)[:half])
+        self.assertLess(
+            probe, 4.0,
+            f"a single parse of {half} characters took {probe:.2f} s — far past anything a "
+            f"linear scan can cost, so the amount regex is backtracking again. Stopping here "
+            f"instead of running the full scaling measurement, which would take minutes at "
+            f"this speed")
+
+        short = fastest_run(half)
+        long = fastest_run(half * 2)
+        ratio = long / short
+
+        self.assertLess(
+            ratio, 3.0,
+            f"parsing time grew {ratio:.1f}x when the text doubled "
+            f"({half} chars: {short:.3f} s, {half * 2} chars: {long:.3f} s) — "
+            f"linear scanning grows ~2x, quadratic ~4x")
+
+        # Kept as a second, deliberately loose backstop: the quadratic version needed
+        # 20-33 s at this length, so this only fires on a genuine regression.
+        self.assertLess(long, 10.0, f"parsing {half * 2} characters took {long:.2f} s")
+
+    def _time_parse(self, text):
+        started = time.perf_counter()
+        self.parser.find_currencies(text)
+        return time.perf_counter() - started
+
+    def test_text_longer_than_the_limit_is_not_parsed(self):
+        # The cap is a backstop for input that should not reach the parser at all
+        # (a caption concatenated with something else, say). At the limit the text is
+        # still parsed normally; one character over it, nothing is.
+        tail = " 100 рублей"
+        at_limit = "а" * (MAX_TEXT_LENGTH - len(tail)) + tail
+        self.assertEqual(len(at_limit), MAX_TEXT_LENGTH)
+        self.assertEqual(self.parser.find_currencies(at_limit), [(100.0, "RUB", "100 рублей")])
+
+        over_limit = "а" + at_limit
+        with self.assertLogs("currency_parser", level="WARNING") as captured:
+            self.assertEqual(self.parser.find_currencies(over_limit), [])
+        # The length is logged, the message text is not.
+        self.assertIn(str(len(over_limit)), captured.output[0])
+        self.assertNotIn("рублей", captured.output[0])

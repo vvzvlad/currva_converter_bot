@@ -26,9 +26,42 @@ logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 # /currencies.
 AMBIGUOUS_CODES = frozenset({'ALL', 'BOB', 'CUP', 'MAD', 'MOP', 'PEN', 'SOS', 'TOP'})
 
+# Hard cap on the text we are willing to scan. Telegram allows 4096 characters per
+# message and the parser runs on every message in every group chat, so an oversized
+# input must degrade to "no currencies found" instead of burning CPU in the handler.
+MAX_TEXT_LENGTH = 4096
+
 class CurrencyParser:
     def __init__(self):
-        self.number = r'(?P<amount>(?:\d{1,3}(?:[., ]\d{3})*|\d+)(?:[.,]\d+)?(?:к)?)'
+        # Amount pattern. Four details here are load-bearing for *performance*, not
+        # only for correctness: this regex is embedded in ~170 patterns, each of which
+        # is run over every incoming message, and `re` does not release the GIL — a slow
+        # scan freezes the whole bot process, not just the calling thread.
+        #
+        #   \d{1,3}+   The leading group of an amount. Possessive: if it gave a digit
+        #       back, the next character would be a digit again, and no continuation of
+        #       the pattern can start with one — so a shorter first group can never turn
+        #       a failed match into a successful one, it only triples the work.
+        #   {0,6} instead of *   The thousands-separator class contains a SPACE, so on a
+        #       run of digit groups ("123 456 789 123 456 ...") an unbounded repeat eats
+        #       the whole tail from every start position and then gives it back group by
+        #       group — quadratic. A 4096-character message (the Telegram limit) cost
+        #       ~20 s of CPU. Six groups reach 10^18, far past anything a chat message
+        #       means, and make the per-position work constant.
+        #   (?!\d)   A thousands group followed by another digit can never be part of a
+        #       successful match: nothing that may follow the amount starts with a digit.
+        #       Refusing it up front loses no match and removes the ambiguity with the
+        #       decimal part below, so "1.2345" stays a decimal instead of "1.234" + "5".
+        #   (?<!\d)\d++   Plain-integer branch. Possessive because giving digits back can
+        #       never help (again: nothing after the amount starts with a digit), and the
+        #       lookbehind stops a long unseparated digit run from being rescanned from
+        #       every offset inside it. It drops no match either: a run start always
+        #       yields the same match end as any offset inside the run, and finditer
+        #       prefers the leftmost one.
+        #
+        # The decimal tail and the "к" suffix stay ordinary greedy on purpose — "5крон"
+        # only parses if the engine may give the "к" back so that "крон" can match.
+        self.number = r'(?P<amount>(?:\d{1,3}+(?:[., ]\d{3}(?!\d)){0,6}|(?<!\d)\d++)(?:[.,]\d+)?(?:к)?)'
         self.current_match = ''
 
         handwritten = [
@@ -236,7 +269,12 @@ class CurrencyParser:
         """
         result = []
         matches = []
-        
+
+        # Only the length is logged: message texts never go into the logs.
+        if len(text) > MAX_TEXT_LENGTH:
+            logger.warning(f"Text of {len(text)} characters exceeds the {MAX_TEXT_LENGTH} character limit, skipping currency parsing")
+            return result
+
         # Find all matches first
         for currency, pattern in self.compiled_patterns:
             for match in pattern.finditer(text):
