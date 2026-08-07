@@ -20,11 +20,12 @@ from telebot import types
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from currency_formatter import CurrencyFormatter
-from currency_parser import CurrencyParser
-from exchange_rates_manager import ExchangeRatesManager
-from statistics_manager import StatisticsManager
-from user_settings_manager import UserSettingsManager
+from src.currency_formatter import CurrencyFormatter
+from src.currency_parser import CurrencyParser
+from src.exchange_rates_manager import ExchangeRatesManager
+from src.settings import settings
+from src.statistics_manager import StatisticsManager
+from src.user_settings_manager import UserSettingsManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,24 +36,11 @@ logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 
 OBSERVER = None
 
-bot_token = os.getenv('BOT_TOKEN')
-if not bot_token:
-    logger.error("BOT_TOKEN environment variable is not set.")
-    sys.exit("Error: BOT_TOKEN environment variable is not set.")
-logger.info(f"Bot init, token: {bot_token}")
-bot = telebot.TeleBot(bot_token)
-
-api_key = os.getenv('API_KEY')
-if not api_key:
-    logger.error("API_KEY environment variable is not set.")
-    sys.exit("Error: API_KEY environment variable is not set.")
-logger.info(f"API key: {api_key}")
-
-admin_user_id = os.getenv('ADMIN_USER_ID')
-if not admin_user_id:
-    logger.error("ADMIN_USER_ID environment variable is not set.")
-    sys.exit("Error: ADMIN_USER_ID environment variable is not set.")
-logger.info(f"Admin user ID: {admin_user_id}")
+# Credentials are validated by pydantic-settings at import time: a missing
+# variable already failed the process with a readable message. Never log the
+# token or the API key, not even partially.
+logger.info("Bot init")
+bot = telebot.TeleBot(settings.bot_token)
 
 
 rates_manager = ExchangeRatesManager()
@@ -148,7 +136,7 @@ def handle_currencies(message):
 
 @bot.message_handler(commands=['stats'])
 def send_statistics(message):
-    if message.from_user.id != int(admin_user_id):
+    if message.from_user.id != settings.admin_user_id:
         bot.reply_to(message, "У вас нет доступа к этой команде")
         return
     
@@ -401,18 +389,24 @@ def signal_handler(_signum, _frame):
     sys.exit(0)
 
 
-if __name__ == '__main__':
+def main():
+    # `global` is required: without it the assignment below makes OBSERVER local
+    # and signal_handler would still see the module-level None.
+    global OBSERVER
+
     logger.info(f"Bot name: @{bot.get_me().username}")
     logger.info(f"Starting currency converter bot...\n\n\n")
-    
+
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    
+
     event_handler = CodeChangeHandler()
     OBSERVER = Observer()
-    OBSERVER.schedule(event_handler, path='.', recursive=False)
+    # Watch the package directory only (non-recursive): edits to main.py in the
+    # repo root are NOT picked up and do not trigger a restart.
+    OBSERVER.schedule(event_handler, path=os.path.dirname(os.path.abspath(__file__)), recursive=False)
     OBSERVER.start()
-    
+
     try:
         logger.info("Starting bot polling...")
         bot.infinity_polling(timeout=60, long_polling_timeout=60)
@@ -422,3 +416,7 @@ if __name__ == '__main__':
         OBSERVER.stop()
         OBSERVER.join()
         logger.info("Bot stopped")
+
+
+if __name__ == "__main__":
+    main()

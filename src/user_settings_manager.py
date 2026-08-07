@@ -11,6 +11,8 @@ import os
 
 import pickledb
 
+from src.settings import settings
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -20,7 +22,7 @@ logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 
 
 class UserSettingsManager:
-    def __init__(self, db_file: str = 'data/user_settings.json'):
+    def __init__(self, db_file: str = settings.user_settings_db_path):
         self._db_file = Path(db_file)
         self._db_file.parent.mkdir(parents=True, exist_ok=True)
         

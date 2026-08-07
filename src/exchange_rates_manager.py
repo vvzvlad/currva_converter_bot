@@ -14,6 +14,8 @@ from pathlib import Path
 
 import requests
 
+from src.settings import settings
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -24,7 +26,7 @@ logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 
 UPDATES_INTERVAL = 12 * 60 * 60  # 12 hours
 class ExchangeRatesManager:
-    def __init__(self, cache_file: str = 'data/exchange_rates_cache.json'):
+    def __init__(self, cache_file: str = settings.exchange_rates_cache_path):
         self._cache_file = Path(cache_file)
         self._rates: Dict = {}
         self._last_update: Optional[datetime] = None
@@ -100,7 +102,7 @@ class ExchangeRatesManager:
         
         try:
             url = "https://api.apilayer.com/currency_data/live"
-            headers = {"apikey": os.getenv('API_KEY')}
+            headers = {"apikey": settings.api_key}
             
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()

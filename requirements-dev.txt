@@ -1,0 +1,6 @@
+# Dev/test dependencies — not needed at runtime.
+-r requirements.txt
+
+pytest==9.0.3
+pytest-cov==7.1.0
+pyright==1.1.350

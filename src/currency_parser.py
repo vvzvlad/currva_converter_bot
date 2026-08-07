@@ -8,6 +8,8 @@ from typing import List, Tuple
 import logging
 import os
 
+from src.currencies import CURRENCIES
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -15,12 +17,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 
+# ISO codes that are also ordinary English words. Parsing them by code would make
+# the bot barge into messages that have nothing to do with money ("1 CUP of flour",
+# "3 TOP", "5 MAD MAX"), so the generated fallback skips them. None of them has a
+# hand-written pattern either, so amounts in these currencies are not recognised in
+# text at all — a deliberate trade-off: a false match on plain English is worse than
+# missing an exotic currency. They remain available as *target* currencies via
+# /currencies.
+AMBIGUOUS_CODES = frozenset({'ALL', 'BOB', 'CUP', 'MAD', 'MOP', 'PEN', 'SOS', 'TOP'})
+
 class CurrencyParser:
     def __init__(self):
         self.number = r'(?P<amount>(?:\d{1,3}(?:[., ]\d{3})*|\d+)(?:[.,]\d+)?(?:к)?)'
         self.current_match = ''
 
-        self.patterns = [
+        handwritten = [
             ('ILS',     fr'{self.number}\s*(?:шекел(?:ей|я|ь)|шек|шах|ils|ILS|₪)\b'),
             ('ILS',     fr'{self.number}\s*₪'),
     
@@ -109,7 +120,33 @@ class CurrencyParser:
             # Uzbekistani so'm (sum) and som (user requested mapping to UZS)
             ('UZS',     fr'{self.number}\s*(?:сум(?:ов|а|)|сом(?:ов|а|)|uzs|UZS)\b')
         ]
-        
+
+        # Codes whose hand-written pattern already matches the bare "<amount> <CODE>"
+        # form. Generating a fallback for them would only add a duplicate pass over
+        # the text and a duplicate match that the overlap filter throws away anyway.
+        # Detected by probing rather than hardcoded, so the two lists cannot drift apart.
+        handwritten_res = [re.compile(p, re.IGNORECASE) for _, p in handwritten]
+
+        def _already_matched(code: str) -> bool:
+            probe = f"1 {code}"
+            for compiled in handwritten_res:
+                found = compiled.search(probe)
+                if found and found.group(0) == probe:
+                    return True
+            return False
+
+        # Fallback: "<amount> <ISO CODE>" for every known currency that no hand-written
+        # pattern covers yet, so the long tail (KWD, CHF, NOK, ...) parses without a
+        # hand-written regex.
+        # (?-i:...) switches IGNORECASE off for the code itself: matching codes
+        # case-insensitively would turn ordinary words into currency amounts
+        # ("3 top", "5 mad", "2 all", "8 cup").
+        self.patterns = handwritten + [
+            (currency.code, rf'{self.number}\s*(?-i:{currency.code})\b')
+            for currency in CURRENCIES.values()
+            if currency.code not in AMBIGUOUS_CODES and not _already_matched(currency.code)
+        ]
+
         self.compiled_patterns = [
             (curr, re.compile(pattern, re.IGNORECASE)) 
             for curr, pattern in self.patterns

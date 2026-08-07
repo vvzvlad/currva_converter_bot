@@ -1,0 +1,50 @@
+# Deploy template. Pull the prebuilt image from the container registry — do NOT build on prod.
+# Values below are PLACEHOLDERS (XXX), not real secrets.
+#
+# This is the POLLING-BOT variant: the bot has no inbound port, so there are no
+# `networks`, no Traefik labels and no healthcheck.
+
+volumes:
+  currva_converter_bot:
+
+services:
+  currva_converter_bot:
+    image: ghcr.io/vvzvlad/currva_converter_bot:latest
+    # Same image is published to the Gitea registry; switch by uncommenting:
+    # image: gitea.vvzvlad.xyz/projects/currva_converter_bot:latest
+    container_name: currva-converter-bot
+    restart: always
+    # The app runs as non-root user `app` (uid 1000): the entrypoint starts as
+    # root, chowns /app/data and drops privileges via gosu. Setting a
+    # `user: "UID:GID"` override here makes the entrypoint skip the chown —
+    # the volume must then already be owned by that uid.
+    security_opt:
+      - no-new-privileges:true   # forbids privilege escalation via setuid binaries; compatible with gosu (it only drops privileges)
+    volumes:
+      - currva_converter_bot:/app/data   # rates cache, statistics and user settings survive restart/update
+    environment:
+      BOT_TOKEN: XXX
+      API_KEY: XXX
+      ADMIN_USER_ID: XXX
+      TZ: Europe/Moscow
+      # LOG_LEVEL: INFO
+      # Optional InfluxDB metrics. Leave INFLUX_VERSION unset to disable reporting.
+      # INFLUX_VERSION: "2"
+      # INFLUX_URL: http://influxdb:8086
+      # INFLUX_TOPIC: bots/currva_converter_bot
+      # INFLUX_REPORTING_PERIOD: 300
+      # InfluxDB 2.x
+      # INFLUX_TOKEN: XXX
+      # INFLUX_ORG: XXX
+      # INFLUX_BUCKET: XXX
+      # InfluxDB 1.8
+      # INFLUX_DB: XXX
+      # INFLUX_USER: XXX
+      # INFLUX_PASSWORD: XXX
+    logging:
+      driver: "json-file"
+      options:
+        max-file: 5
+        max-size: 10m
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"   # auto-update the image

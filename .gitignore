@@ -1,9 +1,19 @@
+.env
+.venv/
+venv/
+ENV/
+env/
 __pycache__/
 *.py[cod]
 *$py.class
-.env
-.venv
-data/
-exchange_rates_cache.json
+*.so
+.Python
+*.swp
+.DS_Store
+logs/
+data/*
+!data/.gitkeep
+# Claude Code agent worktrees — never commit
+.claude/worktrees/
+.mypy_cache/
 .vscode/
-!hooks/

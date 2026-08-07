@@ -4,15 +4,16 @@
 # type: ignore
 
 import unittest
-from currency_parser import CurrencyParser
 
-class TestCurrencyParser(CurrencyParser):
-    def process_currencies(self, currencies):
-        return currencies
+from src.currencies import CURRENCIES
+from src.currency_parser import AMBIGUOUS_CODES
+
+from tests.stubs import StubCurrencyParser
+
 
 class TestCurrencyParsing(unittest.TestCase):
     def setUp(self):
-        self.parser = TestCurrencyParser()
+        self.parser = StubCurrencyParser()
 
     def test_all_cases(self):
         def test(text, expected):
@@ -61,7 +62,7 @@ class TestCurrencyParsing(unittest.TestCase):
         test("500₽", [(500.0, "RUB", "500₽")])
         test("500 ₽", [(500.0, "RUB", "500 ₽")])
         test("500\₽", [])
-        test("\500", [])
+        test(r"\500", [])
         test("500'₽", [])
         test("500,₽", [])
         test("500.₽", [])
@@ -421,7 +422,7 @@ class TestCurrencyParsing(unittest.TestCase):
         test("30 пхп", [])
         test("100500 кгам", [])
         test("1337 чего блядь", [])
-        test("5500 AMD", [])
+        test("5500 AMD", [(5500.0, "AMD", "5500 AMD")])
         test("1337 лари", [(1337.0, "GEL", "1337 лари")])
         test("415 amd", [])
         test("300$", [(300.0, "USD", "300$")])
@@ -612,6 +613,35 @@ class TestCurrencyParsing(unittest.TestCase):
         test("0.2 Br", [(0.2, "BYN", "0.2 Br")])
         test("0.2Br", [(0.2, "BYN", "0.2Br")])
 
+        # ISO code fallback: every known currency parses by its uppercase code,
+        # except the codes that are ordinary English words (see AMBIGUOUS_CODES)
+        for curr in CURRENCIES.values():
+            if curr.code in AMBIGUOUS_CODES:
+                continue
+            test(f"1 {curr.code}", [(1.0, curr.code, f"1 {curr.code}")])
+
+        # ...but a lowercase code is NOT enough for the long tail, otherwise ordinary
+        # words would become currency amounts
+        test("поставил 3 top", [])
+        test("5 mad max", [])
+        test("я взял 3 all", [])
+        test("8 cup", [])
+        test("2 mop", [])
+        test("1 bob", [])
+        test("50 sos", [])
+        test("7666777 KWD", [(7666777.0, "KWD", "7666777 KWD")])
+        test("100 CHF", [(100.0, "CHF", "100 CHF")])
+
+        # AMBIGUOUS_CODES are not parsed by code even in uppercase
+        test("рецепт: 1 CUP муки", [])
+        test("score 3 TOP", [])
+        test("5 MAD MAX", [])
+        test("I PAID 100 ALL DAY", [])
+        test("заказ 5 SOS", [])
+
+        # AMD has no ISO code in its hand-written pattern, so it must keep its fallback
+        test("1000 AMD", [(1000.0, "AMD", "1000 AMD")])
+
     def test_currency_boundary_detection(self):
         def test(text, expected):
             result = self.parser.find_currencies(text)
@@ -691,148 +721,3 @@ class TestCurrencyParsing(unittest.TestCase):
         
         # Тест из примера
         test("https://open.spotify.com/track/3cfgisz6DhZmooQk08P4Eu", [])
-
-from currency_formatter import CurrencyFormatter
-
-class StubExchangeRatesManager:
-    def get_rate(self, from_currency, to_currency):
-        # Возвращаем фиксированный курс для тестирования
-        return 1.0  # Курс 1 для упрощения тестов
-
-class TestCurrencyFormatting(unittest.TestCase):
-    def setUp(self):
-        self.parser = TestCurrencyParser()
-        self.formatter = CurrencyFormatter()
-        self.rates_manager = StubExchangeRatesManager()
-        self.rates = {}
-        for curr in self.formatter.currency_formats.keys():
-            for target in self.formatter.currency_formats.keys():
-                if curr != target:
-                    self.rates[f"{curr}_{target}"] = self.rates_manager.get_rate(curr, target)
-
-    def test_formatter(self):
-        def test(input_text: str, expected_output: str):
-            currency_list = self.parser.find_currencies(input_text)
-            result = self.formatter.format_multiple_conversions(currency_list, self.rates, mode='chat')
-            self.assertEqual(result, expected_output)
-
-        test("100 долларов", "100 долларов (🇺🇸) это 🇷🇺 100 ₽, 🇮🇱 100 ₪, 🇪🇺 100 €, 🇬🇧 £100, 🇯🇵 ¥100, 🇦🇲 100 ֏")
-        test("100 фунтов", "100 фунтов (🇬🇧) это 45.4 кг, а также 🇷🇺 100 ₽, 🇺🇸 $100, 🇮🇱 100 ₪, 🇪🇺 100 €, 🇯🇵 ¥100, 🇦🇲 100 ֏")
-        test("0 рублей", "Нахуй иди")
-        test("0 динаров", "Нахуй иди")
-        test("k динаров", None)
-        test("k долларов", None)
-        test("k евро", None)
-        test("k йен", None)
-        test("k юаней", None)
-        test("k лари", None)
-        test("k батов", None)
-        test("k тенге", None)
-        test(" 5 пять минут пять минут долларов", None)
-        test("2000000 долларов", "Откуда у тебя такие деньги, сынок?")
-        test("Ноль ноль долларов", None)
-        test("Пять минус пять долларов", None)
-        test("Восемь восемьсот пять пять пять три пять три пять рублей", None)
-        test("Один один доллар", None)
-        test("1 bdsm", None)
-        test("1 килограмм рублей", None)
-        test("1 TON", None)
-        test("дюжина рублей", None)
-        test("Сво рублей", None)
-        test("Да бля а как работает сто сто рублей", None)
-        test("6 пять долларов", None)
-        test("13\" рублей", None)
-        test("Десятнадцать рублей", None)
-        test("миллиард долларов", None)
-        test("Додекалион рублей", None)
-        test("ёёёёё23322ёёёё драм", None)
-        test("Один четыре восемь восемь продавать рублей не бросим", None)
-        test("ёдесять рублей", None)
-        test("тридцатьё лари", None)
-        test("Двeсти рyблей", None)
-        test("Двести') exit() рублей", None)
-        test("Двести рублей') exit() рублей", None)
-        test("Две тысячи двести <script>alert()</script> двадцать два рубля", None)
-        test("две тысячи ХУËВ ТЕБЕ В ЖОПУ двадцать восемь фунтов", None)
-        test("Пять сто пять восемь рублей", None)
-        test("Пять сто пять восемь", None)
-        test("Две тысячи ПОШЕЛ НА ХУЙ двести двадцать два рубля", None)
-        test("Сто блядских рублей", None)
-        test("Пять пять рублей", None)
-        test("что рублей где", None)
-        test("Две тысячи бля двести двадцать два рубля", None)
-        test("Сто сто рублей", None)
-        test("Две тысячи двести двадцать два рубля", None)
-        test("Арубля", None)
-        test("1Арубля", None)
-        test("10 Арубля", None)
-        test("Влад скинь долларов пабрацки", None)
-        test("2 бля", None)
-        test("Влад скинь длооаров пабрацки", None)
-        test("Пица рублей", None)
-        test("пицот рублей", None)
-        test("``5+5`` долларов", None)
-        test("Звоните мне на +79936969420", None)
-        test("у меня когда-то в Додо был пин-код 1488, чтобы додорубли списывать", None)
-        test("100500 кгам", None)
-        test("1488 хуёв", None)
-        test("сто тысяч миллионов зимбабвийских долларов", None)
-        test("сто фунтов хуев тебе в панамку", None)
-        test("два фунта мяса", None)
-        test("100 т", None)
-        test("я вам расскажу историю про 1488, но писать мне лень, поэтому будет войс мессадж ебать", None)
-        test("50 юсд", None)
-        test("Пять фунтов долларов", None)
-        test("Сука где, фунты есть же", None)
-        test("100 камней", None)
-        test("Сто фунтов", None)
-        test("Я хочу доллар по рублю", None)
-        test("Хотя нахер мне доллар)", None)
-        test("Могу продать рубль по доллару", None)
-        test("Суки скинулись по рублю и разбежались", None)
-        test("¾ рублей", None)
-        test("Deployed vm nillion-cxs6v0lt in 'dosage' (took 26 min 8 sec, vm 145 out of 301 in batch, left 156 nodes", None)
-        test("50 cents", "In Da Club!")
-        test("0.5 USD", "In Da Club!")
-        test("Привет, как дела?", None)
-
-    def test_inline_formatter(self):
-        def test(input_text: str, expected_output: str):
-            currency_list = self.parser.find_currencies(input_text)
-            result = self.formatter.format_multiple_conversions(currency_list, self.rates, mode='inline')
-            self.assertEqual(result, expected_output)
-
-        # Базовые тесты для inline режима
-        test("100 долларов", "100 долларов (🇷🇺 100 ₽, 🇮🇱 100 ₪, 🇪🇺 100 €, 🇬🇧 £100, 🇯🇵 ¥100, 🇦🇲 100 ֏)")
-        test("100 фунтов", "100 фунтов (45.4 кг) (🇷🇺 100 ₽, 🇺🇸 $100, 🇮🇱 100 ₪, 🇪🇺 100 €, 🇯🇵 ¥100, 🇦🇲 100 ֏)")
-        
-        # Тесты для специальных случаев
-        test("0 долларов", "0 долларов (🇷🇺 0 ₽, 🇮🇱 0 ₪, 🇪🇺 0 €, 🇬🇧 £0, 🇯🇵 ¥0, 🇦🇲 0 ֏)")
-        test("0.5 USD", "0.5 USD (🇷🇺 0.5 ₽, 🇮🇱 0.5 ₪, 🇪🇺 0.5 €, 🇬🇧 £0.5, 🇯🇵 ¥0.5, 🇦🇲 0.5 ֏)")
-        test("2000000 долларов", "2000000 долларов (🇷🇺 2 000 000 ₽, 🇮🇱 2 000 000 ₪, 🇪🇺 2 000 000 €, 🇬🇧 £2 000 000, 🇯🇵 ¥2 000 000, 🇦🇲 2 000 000 ֏)")
-        
-        #todo поддержать тест форматтера для проверки итогового сообщения
-        #test("я нажрался на 100 долларов в хламину", "я нажрался на 100 долларов (🇪🇺 €100, 🇬🇧 £100, 🇷🇺 100 ₽, 🇮🇱 100 ₪, 🇯🇵 100 ¥, 🇦🇲 100 ֏) в хламину")
-        # Тест для множественных валют
-        test("100 долларов и 200 евро", 
-                "100 долларов (🇷🇺 100 ₽, 🇮🇱 100 ₪, 🇪🇺 100 €, 🇬🇧 £100, 🇯🇵 ¥100, 🇦🇲 100 ֏)\n" + 
-                "200 евро (🇷🇺 200 ₽, 🇺🇸 $200, 🇮🇱 200 ₪, 🇬🇧 £200, 🇯🇵 ¥200, 🇦🇲 200 ֏)") 
-        
-        # Тест для фунтов (с конвертацией в кг)
-        test("1 фунт", "1 фунт (0.5 кг) (🇷🇺 1 ₽, 🇺🇸 $1, 🇮🇱 1 ₪, 🇪🇺 1 €, 🇯🇵 ¥1, 🇦🇲 1 ֏)")
-        
-        # Тест для форматирования больших чисел
-        test("30000 долларов", "30000 долларов (🇷🇺 30 000 ₽, 🇮🇱 30 000 ₪, 🇪🇺 30 000 €, 🇬🇧 £30 000, 🇯🇵 ¥30 000, 🇦🇲 30 000 ֏)")
-        test("10000 долларов", "10000 долларов (🇷🇺 10000 ₽, 🇮🇱 10000 ₪, 🇪🇺 10000 €, 🇬🇧 £10000, 🇯🇵 ¥10000, 🇦🇲 10000 ֏)")
-
-        # Тест для десятичных чисел
-        test("12.34 евро", "12.34 евро (🇷🇺 12.3 ₽, 🇺🇸 $12.3, 🇮🇱 12.3 ₪, 🇬🇧 £12.3, 🇯🇵 ¥12.3, 🇦🇲 12.3 ֏)")
-        
-        # Тест для отсутствия курсов конвертации
-        def test_no_rates(self):
-            currency_list = self.parser.find_currencies("100 долларов")
-            result = self.formatter.format_multiple_conversions(currency_list, {}, mode='inline')
-            self.assertEqual(result, "100 долларов (нет доступных курсов конвертации)")
-
-if __name__ == '__main__':
-    unittest.main() 

@@ -15,6 +15,8 @@ import requests
 import pickledb
 from telebot.types import User
 
+from src.settings import settings
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -24,7 +26,7 @@ logger = logging.getLogger(os.path.splitext(os.path.basename(__file__))[0])
 
 
 class StatisticsManager:
-    def __init__(self, db_file: str = 'data/statistics.json'):
+    def __init__(self, db_file: str = settings.statistics_db_path):
         Path(db_file).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._db = pickledb.load(db_file, auto_dump=True)
@@ -60,57 +62,53 @@ class StatisticsManager:
         self._reporting_thread = None
         self._stop_reporting = False
 
-        # Try to configure InfluxDB from environment variables
-        influx_version = os.getenv('INFLUX_VERSION')
+        # Try to configure InfluxDB from settings
+        influx_version = settings.influx_version
         if not influx_version:
             logger.info("INFLUX_VERSION not set, metrics reporting disabled")
             return
         else:
             logger.info(f"Influx version: {influx_version}")
 
-        influx_topic = os.getenv('INFLUX_TOPIC')
+        influx_topic = settings.influx_topic
         if not influx_topic:
             logger.error("INFLUX_TOPIC not set, metrics reporting disabled")
             return
         else:
             logger.info(f"Influx topic: {influx_topic}")
             self._influx_topic = str(influx_topic)  # Save as class attribute
-            
-        # Get reporting period from env (default 300 seconds = 5 minutes)
-        try:
-            self._reporting_period = int(os.getenv('INFLUX_REPORTING_PERIOD', '300'))
-            if self._reporting_period < 10:  # Prevent too frequent reporting
-                logger.warning("INFLUX_REPORTING_PERIOD too low, setting to 100 seconds minimum")
-                self._reporting_period = 100
-        except ValueError:
-            logger.error("Invalid INFLUX_REPORTING_PERIOD value, using default 300 seconds")
-            self._reporting_period = 300
+
+        # Reporting period (default 300 seconds = 5 minutes). No int()/ValueError
+        # handling here: pydantic already parsed it and a garbage value fails at
+        # startup with a readable message.
+        self._reporting_period = settings.influx_reporting_period
+        if self._reporting_period < 100:  # Prevent too frequent reporting
+            logger.warning("INFLUX_REPORTING_PERIOD too low, setting to 100 seconds minimum")
+            self._reporting_period = 100
         logger.info(f"Influx reporting period: {self._reporting_period} seconds")
-            
-        influx_url = os.getenv('INFLUX_URL')
+
+        influx_url = settings.influx_url
         if influx_version == '2':
-            influx_token = os.getenv('INFLUX_TOKEN')
-            influx_org = os.getenv('INFLUX_ORG')
-            influx_bucket = os.getenv('INFLUX_BUCKET')
+            influx_token = settings.influx_token
+            influx_org = settings.influx_org
+            influx_bucket = settings.influx_bucket
             
             if all([influx_url, influx_token, influx_org, influx_bucket]):
                 logger.info(f"Influx url: {influx_url}")
-                logger.info(f"Influx token: {influx_token}")
                 logger.info(f"Influx org: {influx_org}")
                 logger.info(f"Influx bucket: {influx_bucket}")
                 self.configure_metrics_v2( str(influx_url), str(influx_token), str(influx_org), str(influx_bucket))
             else:
                 logger.error("Missing required InfluxDB v2 configuration parameters")
         elif influx_version == '1.8':
-            influx_db = os.getenv('INFLUX_DB')
-            influx_user = os.getenv('INFLUX_USER')
-            influx_password = os.getenv('INFLUX_PASSWORD')
+            influx_db = settings.influx_db
+            influx_user = settings.influx_user
+            influx_password = settings.influx_password
             
             if all([influx_url, influx_db, influx_user, influx_password]):
                 logger.info(f"Influx url: {influx_url}")
                 logger.info(f"Influx db: {influx_db}")
                 logger.info(f"Influx user: {influx_user}")
-                logger.info(f"Influx password: {influx_password}")
                 self.configure_metrics_v1(str(influx_url), str(influx_db), str(influx_user), str(influx_password))
 
             else:

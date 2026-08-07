@@ -16,62 +16,118 @@ If you're still here and want to proceed -   good luck! You have been warned.
 
 ## About the Project
 
-A Telegram bot for currency conversion.
+A Telegram bot that watches chat messages for amounts of money («а я купил за 15000 лари
+телевизор») and replies with the same amount converted into other currencies. It also
+supports inline mode, and `/currencies` lets a user or a chat admin pick which currencies
+are shown.
+
+## Quick start
+
+Everything routine is wrapped in the `Makefile` (`make help` lists all targets):
+
+```bash
+make install                # create .venv + install dev/test deps
+make env                    # create .env from .env.example, then fill in the values
+make test                   # run tests
+make run                    # run the bot
+```
+
+Python targets (`make test`, `make run`) create and reuse a local `.venv`
+automatically — you never need the system Python.
+
+## What's here
+
+| Path | Purpose |
+|------|---------|
+| `Makefile` | Single entry point for repeated actions: `install`, `env`, `test`, `run`. |
+| `main.py` | Thin entry point over `src/`. |
+| `src/settings.py` | All config, read from ENV / `.env`. |
+| `src/currencies.py` | The currency reference book — single source of truth for parser and formatter. |
+| `src/bot.py` | Telegram handlers, inline mode, `/currencies`, `/stats`. |
+| `tests/` | pytest suite (runs in CI before the image is built). |
+| `data/` | Runtime state: rates cache, statistics, user settings. Gitignored, mounted as a volume. |
+| `Dockerfile` | Slim single-stage build; no `EXPOSE`; privileges dropped by `entrypoint.sh`. |
+| `docker-compose.yml` | Deploy template — image from the container registry, volume, watchtower label. |
+| `.env.example` | Full list of env vars with placeholders. Copy to `.env`. |
+| `.gitea/workflows/` | Gitea Actions CI: `test` → `build` → push to both `ghcr.io` and `gitea.vvzvlad.xyz`. |
+| `AGENTS.md` | Conventions / onboarding for agents. |
+
+## Configuration
+
+All configuration comes from environment variables (or a local `.env`, see `.env.example`).
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `BOT_TOKEN` | yes | — | Telegram bot token from @BotFather. |
+| `API_KEY` | yes | — | API key for https://api.apilayer.com/currency_data |
+| `ADMIN_USER_ID` | yes | — | Telegram user id allowed to run `/stats`. |
+| `LOG_LEVEL` | no | `INFO` | `CRITICAL`/`ERROR`/`WARNING`/`INFO`/`DEBUG`, case-insensitive. `DEBUG` only affects the bot's own logging: the HTTP client loggers are clamped to `max(INFO, LOG_LEVEL)` on purpose, so `DEBUG` does not turn on request logging and the bot token does not reach the log through the loggers. An uncaught exception can still print a traceback containing the full request URL to stderr. |
+| `EXCHANGE_RATES_CACHE_PATH` | no | `data/exchange_rates_cache.json` | Rates cache file. Rarely worth changing. |
+| `STATISTICS_DB_PATH` | no | `data/statistics.json` | Statistics file. Rarely worth changing. |
+| `USER_SETTINGS_DB_PATH` | no | `data/user_settings.json` | Per-user/chat settings file. Rarely worth changing. |
+| `INFLUX_VERSION` | no | — | `2` or `1.8`. Unset → metrics reporting disabled. |
+| `INFLUX_URL` | for metrics | — | InfluxDB server URL. |
+| `INFLUX_TOPIC` | for metrics | — | Measurement name, e.g. `bots/currva_converter_bot`. |
+| `INFLUX_REPORTING_PERIOD` | no | `300` | Reporting period in seconds (minimum 100). |
+| `INFLUX_TOKEN` | InfluxDB 2.x | — | API token. |
+| `INFLUX_ORG` | InfluxDB 2.x | — | Organization name. |
+| `INFLUX_BUCKET` | InfluxDB 2.x | — | Bucket name. |
+| `INFLUX_DB` | InfluxDB 1.8 | — | Database name. |
+| `INFLUX_USER` | InfluxDB 1.8 | — | Username. |
+| `INFLUX_PASSWORD` | InfluxDB 1.8 | — | Password. |
+
+A missing required variable fails the bot at startup with a message naming the variable.
+
+The three `*_PATH` variables are relative to the working directory — which is `/app` in the
+container and the repository root under `make run`, so the defaults resolve to the `data/`
+volume in both cases. There is normally no reason to override them.
 
 ## Start with Docker Compose
 
-1. Create a `docker-compose.yml` file:
+Deploy the prebuilt image — do not build on prod. CI lives in Gitea Actions and publishes
+the very same image to both registries: `ghcr.io/vvzvlad/currva_converter_bot` (what
+production and watchtower pull) and `gitea.vvzvlad.xyz/projects/currva_converter_bot`. See
+`docker-compose.yml` in this repo for the full template; the short version:
 
-   ```yaml
-   volumes:
-     data:
-  
-   services:
-     bot:
-       image: ghcr.io/vvzvlad/currva_converter_bot:latest
-       restart: unless-stopped
-       environment:
-         - BOT_TOKEN=your_telegram_bot_token
-         - API_KEY=your_exchange_rates_api_key for https://api.apilayer.com/currency_data
-   ```
+```yaml
+volumes:
+  currva_converter_bot:
 
-2. Start the bot by running:
+services:
+  currva_converter_bot:
+    image: ghcr.io/vvzvlad/currva_converter_bot:latest
+    # Same image is published to the Gitea registry; switch by uncommenting:
+    # image: gitea.vvzvlad.xyz/projects/currva_converter_bot:latest
+    container_name: currva-converter-bot
+    restart: always
+    volumes:
+      - currva_converter_bot:/app/data
+    environment:
+      BOT_TOKEN: XXX
+      API_KEY: XXX
+      ADMIN_USER_ID: XXX
+      TZ: Europe/Moscow
+```
 
-   ```bash
-   docker-compose up -d
-   ```
+```bash
+docker compose up -d
+```
 
-## Metrics Configuration
+All mutable state (rates cache, statistics, user settings) lives in `/app/data`, so it
+survives restarts and image updates as long as the volume is kept.
 
-The bot can optionally report metrics to InfluxDB. Set `INFLUX_VERSION` to enable metrics reporting:
+## Metrics
 
-- `INFLUX_VERSION=2` for InfluxDB v2.x
-- `INFLUX_VERSION=1.8` for InfluxDB v1.8
-- If not set, metrics reporting will be disabled
+The bot can optionally report metrics to InfluxDB. Set `INFLUX_VERSION` to enable it:
 
-Common settings:
+- `INFLUX_VERSION=2` for InfluxDB v2.x — also set `INFLUX_TOKEN`, `INFLUX_ORG`, `INFLUX_BUCKET`
+- `INFLUX_VERSION=1.8` for InfluxDB v1.8 — also set `INFLUX_DB`, `INFLUX_USER`, `INFLUX_PASSWORD`
+- if not set, metrics reporting is disabled
 
-- `INFLUX_URL` - InfluxDB server URL
-- `INFLUX_REPORTING_PERIOD` - Reporting period in seconds (default: 3600, minimum: 100)
-- `INFLUX_TOPIC` - Topic for metrics (e.g. bots/currva_converter_bot)
+Common settings: `INFLUX_URL`, `INFLUX_TOPIC` and `INFLUX_REPORTING_PERIOD`
+(default 300 seconds, minimum 100).
 
-### InfluxDB v2.x Configuration
-
-When `INFLUX_VERSION=2`, set the following environment variables:
-
-- `INFLUX_TOKEN` - API token
-- `INFLUX_ORG` - Organization name
-- `INFLUX_BUCKET` - Bucket name
-
-### InfluxDB v1.8 Configuration
-
-When `INFLUX_VERSION=1.8`, set the following environment variables:
-
-- `INFLUX_DB` - Database name
-- `INFLUX_USER` - Username
-- `INFLUX_PASSWORD` - Password
-
-The bot will report the following metrics at configured intervals:
+The bot reports the following metrics at the configured interval:
 
 - Total requests count
 - Total inline requests count
