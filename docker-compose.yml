@@ -9,9 +9,11 @@ volumes:
 
 services:
   currva_converter_bot:
-    image: ghcr.io/vvzvlad/currva_converter_bot:latest
-    # Same image is published to the Gitea registry; switch by uncommenting:
-    # image: gitea.vvzvlad.xyz/projects/currva_converter_bot:latest
+    # The only registry CI publishes to. The path mirrors the full Gitea repository
+    # name, which the workflow derives from `github.repository` — moving the repo to
+    # another owner changes the image path, and this line has to be updated in the
+    # same hand, otherwise builds stay green while prod is frozen on the old path.
+    image: gitea.vvzvlad.xyz/projects/currva_converter_bot:latest
     container_name: currva-converter-bot
     restart: always
     # SIGTERM handler: stops two background threads (each may be inside an HTTP request)

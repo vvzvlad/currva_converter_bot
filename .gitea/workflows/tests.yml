@@ -1,0 +1,54 @@
+name: Tests
+
+# Split out from image-check-publish.yml on purpose: that workflow must never
+# run on pull_request, because a PR build would push :latest and watchtower
+# would deploy it. Tests alone are safe here and are what a PR actually needs —
+# without this workflow a broken test only surfaces after the merge into master.
+on:
+  # Manual re-run: without it a run that flaked on runner networking could only be
+  # retried by pushing an empty commit to the PR branch. Safe to expose here — this
+  # workflow touches no registry and no secrets, it only runs the test suite.
+  workflow_dispatch:
+  pull_request:
+    branches: [ "master" ]
+
+permissions:
+  contents: read   # checkout
+
+# Unlike the image workflow, cancelling is right here: this job produces no
+# artifacts, so a superseded test run is just wasted runner time.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+# The job below is a verbatim copy of the `test` job in image-check-publish.yml —
+# same steps, same gate. Keep the two in sync: weakening this one would let a PR
+# look green while the merge build goes red.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      run: pip install -r requirements-dev.txt
+
+    - name: Run type checking
+      run: pyright
+
+    - name: Run tests
+      env:
+        # tests/conftest.py already `setdefault()`s these three before anything can
+        # import src.settings, so the suite is green in a bare environment. They are
+        # still spelled out here so a CI run does not silently depend on that file
+        # keeping its defaults — if the conftest block is ever dropped, the suite
+        # keeps passing here instead of failing on an unrelated commit.
+        BOT_TOKEN: test-token
+        API_KEY: test-api-key
+        ADMIN_USER_ID: "1"
+      run: pytest --tb=short -q

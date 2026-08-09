@@ -1,18 +1,33 @@
 name: Docker Image CI
 
+# No `pull_request` trigger on purpose: a PR build would push to the same
+# `:latest` tag that watchtower auto-deploys to prod, so unreviewed branch code
+# would go live. Only pushes to master (and manual runs) publish an image.
+# Tests on a PR live in tests.yml, which has no build job and no secrets.
 on:
   workflow_dispatch:
   push:
-    branches: [ "master", "develop" ]
+    branches: [ "master" ]
 
-# Only `contents: read` is useful here. Gitea 1.26 accepts `packages: write` in this
-# block, but it does NOT make the built-in job token usable against Gitea's own container
-# registry — verified on run 560, where the login answered
-#   Get "https://gitea.vvzvlad.xyz/v2/": unauthorized
-# Both registries therefore authenticate with a PAT from the org secrets: `REGISTRY_TOKEN`
-# for gitea.vvzvlad.xyz and `GHCR_PAT` for ghcr.io (see the `build` job).
+# No `packages: write` here: that scope is GitHub-specific and has no effect on Gitea
+# Actions — the built-in GITEA_TOKEN carries no package scope at all. Gitea 1.26 accepts
+# the key in this block but it does not make the job token usable against the registry
+# (verified on run 560: `Get "https://gitea.vvzvlad.xyz/v2/": unauthorized`). The push
+# below authenticates with the REGISTRY_TOKEN PAT instead.
 permissions:
-  contents: read    # checkout
+  contents: read   # checkout
+
+# Two pushes to the same branch in a row must not race: the runs are independent
+# and the older one may finish last, leaving its :latest on the registry — a
+# watchtower deploy would then ship the previous commit to prod.
+# The group alone already fixes that: runs are serialised, so the newest commit's
+# :latest is written last. Cancelling is deliberately OFF — it would kill the
+# older run together with its :<sha> image, and on two quick pushes the
+# intermediate commit would never be built, leaving holes in the tag history
+# exactly where a rollback is most likely to be needed.
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -33,7 +48,11 @@ jobs:
 
     - name: Run tests
       env:
-        # required ENV so importing settings works
+        # tests/conftest.py already `setdefault()`s these three before anything can
+        # import src.settings, so the suite is green in a bare environment. They are
+        # still spelled out here so a CI run does not silently depend on that file
+        # keeping its defaults — if the conftest block is ever dropped, the suite
+        # keeps passing here instead of failing on an unrelated commit.
         BOT_TOKEN: test-token
         API_KEY: test-api-key
         ADMIN_USER_ID: "1"
@@ -45,105 +64,113 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    # Prod and watchtower still pull from ghcr.io, so the image keeps being published
-    # there; the Gitea registry is populated in parallel for the eventual switch.
-    - name: Log in to the GitHub container registry
-      uses: docker/login-action@v4
-      with:
-        registry: ghcr.io
-        # Hardcoded on purpose: this repo is owned by the `projects` organisation, so
-        # github.repository_owner is an org name, and github.actor is the Gitea account
-        # that pushed — neither is a valid GitHub login for ghcr.io.
-        username: vvzvlad
-        password: ${{ secrets.GHCR_PAT }}
+    - name: Compute image tags
+      id: tags
+      # master -> :<sha> + :latest (watchtower deploys :latest); ANY other branch -> :<branch>.
+      # Do NOT hardcode a second fixed tag in the else branch: a build off a side branch
+      # would then silently overwrite the tag production deploys from — one typo away from
+      # shipping unreviewed code.
+      # The branch name below must stay in sync with this repository's default branch,
+      # which is `master`. If it ever said `main` here, :latest would NEVER be built:
+      # every push would produce a :master tag, prod would stay frozen on the old image,
+      # and no step would go red — a completely silent failure.
+      env:
+        # Passed through the environment instead of being interpolated into the
+        # script text: git allows `$`, backticks, quotes and parentheses in branch
+        # names, so a branch like `feat/$(id)` would otherwise execute on the runner.
+        REF_NAME: ${{ github.ref_name }}
+        REPO: ${{ github.repository }}
+        SHA: ${{ github.sha }}
+      run: |
+        # Gitea allows uppercase letters in repository names, docker does not
+        # accept them in an image path — a repo like `My-Bot` would fail the
+        # build with `invalid reference format`, so lowercase it here.
+        IMAGE="gitea.vvzvlad.xyz/$(printf '%s' "$REPO" | tr 'A-Z' 'a-z')"
+        if [ "$REF_NAME" = "master" ]; then
+          # Tag ORDER matters and must not be "tidied up": the push step iterates
+          # over $TAGS left to right, so :latest is pushed LAST and acts as the
+          # commit of the whole publication. If :<sha> fails to push (network,
+          # registry quota, disk), the run stops before :latest moves and prod
+          # keeps running the previous image. The reverse order would publish a
+          # :latest that watchtower deploys within minutes while its immutable
+          # :<sha> twin — the only rollback point — never made it to the registry.
+          echo "tags=$IMAGE:$SHA $IMAGE:latest" >> "$GITHUB_OUTPUT"
+        else
+          # Sanitise the branch name into a legal docker tag: everything outside
+          # [A-Za-z0-9_.-] (a `/` in feat/foo above all) becomes `-`, and the result
+          # is cut to 100 chars — branch names have no length limit, docker rejects
+          # tags over 128.
+          # The `sed` fixes the first character: docker requires a tag to match
+          # [a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}, so a branch like `-fix`, `(test)`
+          # or `+wip` would otherwise produce a leading `-` and fail the build
+          # with `invalid reference format`.
+          branch_tag=$(printf '%s' "$REF_NAME" | tr -c 'A-Za-z0-9_.-' '-' | sed 's/^[^A-Za-z0-9_]/_/' | cut -c1-100)
+          # The sanitiser passes a name through untouched when it already consists
+          # of legal characters, so a branch literally named `latest` would come
+          # out as the production tag and — one manual workflow_dispatch later —
+          # ship unreviewed code to every watchtower host. The `master` check above
+          # does not cover this: the branch is not `master`, it only borrows its tag.
+          # Reserved names are therefore prefixed instead of being used as-is.
+          if [ "$branch_tag" = "latest" ]; then
+            branch_tag="branch-latest"
+          fi
+          echo "tags=$IMAGE:${branch_tag}" >> "$GITHUB_OUTPUT"
+        fi
 
-    # continue-on-error on purpose: this login is the first Gitea-specific step, and a
-    # failure here (registry down, `packages: write` not honoured) must not abort the job
-    # before the ghcr.io tags — the ones production pulls — have been pushed.
+    - name: Build the Docker image
+      env:
+        # Through the environment, not interpolated into the script text: the
+        # only thing standing between a branch name and command execution on the
+        # runner is the `tr` filter in the step above. `$TAGS` below is
+        # intentionally unquoted — the tags are a space-separated list and word
+        # splitting is exactly what turns it into loop items.
+        TAGS: ${{ steps.tags.outputs.tags }}
+      run: |
+        tag_args=""
+        for tag in $TAGS; do tag_args="$tag_args --tag $tag"; done
+        # --pull is required here: unlike GitHub's ephemeral runners, our runner is
+        # self-hosted with a persistent docker daemon, so a once-pulled python:3.11-slim
+        # would sit in its cache for months and every build would inherit an
+        # unpatched base layer.
+        docker build --pull . --file Dockerfile $tag_args
+
+    # Deliberately AFTER the build, not before it: the build runs `docker build` over
+    # a Dockerfile and a tag list derived from a branch name, and nothing in it needs
+    # registry credentials (the base image comes from Docker Hub). Logging in only
+    # here keeps REGISTRY_TOKEN out of the daemon's config for the whole build.
     - name: Log in to the Gitea container registry
-      continue-on-error: true
       uses: docker/login-action@v4
       with:
         registry: gitea.vvzvlad.xyz
-        # Hardcoded for the same reason as the ghcr.io login: the repo is owned by the
-        # `projects` organisation, so github.repository_owner is an org name and
-        # github.actor is whichever account pushed — neither is guaranteed to be the
-        # account that owns the PAT.
-        username: vvzvlad
+        username: ${{ github.repository_owner }}
+        # PAT with the `write:package` scope, stored as an ORG secret on `projects`.
+        # A repo-level secret of the same name would shadow it — keep it at the org.
+        # The built-in GITEA_TOKEN cannot be used here: it carries no package scope.
         password: ${{ secrets.REGISTRY_TOKEN }}
 
-    - name: Compute image tags
-      id: tags
-      # master -> :latest + :<sha> (watchtower deploys :latest); ANY other branch -> :<branch>.
-      # Do NOT hardcode :develop in the else branch: a build off a side branch would then
-      # silently overwrite the tag production deploys from — one typo away from shipping
-      # unreviewed code. The branch name is sanitised into a legal docker tag: everything
-      # outside [A-Za-z0-9_.-] (a `/` in feat/foo above all) becomes `-`.
-      # Every variant yields one image per registry, emitted as two separate outputs so the
-      # push can be split per registry. The repository path differs between them: Gitea
-      # mirrors github.repository, while ghcr.io historically lives at
-      # vvzvlad/currva_converter_bot and therefore has to be spelled out.
-      # The github.* values are passed through `env:` rather than interpolated into the
-      # script: `${{ }}` is expanded as text before bash runs, and a branch name may
-      # legally contain `$`, backticks, `(`, `)` or `;` — inline interpolation would let a
-      # branch name execute commands in a step that holds both registry secrets.
+    - name: Push Docker images
       env:
-        REF_NAME: ${{ github.ref_name }}
-        SHA: ${{ github.sha }}
-        REPO: ${{ github.repository }}
+        # Same reasoning as in the build step: pass the tags through the
+        # environment, and leave `$TAGS` unquoted so it word-splits into items.
+        TAGS: ${{ steps.tags.outputs.tags }}
       run: |
-        set -euo pipefail
-        ghcr="ghcr.io/vvzvlad/currva_converter_bot"
-        gitea="gitea.vvzvlad.xyz/$REPO"
-        if [ "$REF_NAME" = "master" ]; then
-          echo "ghcr_tags=$ghcr:latest $ghcr:$SHA" >> "$GITHUB_OUTPUT"
-          echo "gitea_tags=$gitea:latest $gitea:$SHA" >> "$GITHUB_OUTPUT"
-        else
-          branch_tag=$(printf '%s' "$REF_NAME" | tr -c 'A-Za-z0-9_.-' '-' | cut -c1-100)
-          # A docker tag must start with [A-Za-z0-9_]; a non-ASCII or empty branch name
-          # would otherwise produce something the daemon rejects at build time.
-          case "$branch_tag" in
-            ""|[!A-Za-z0-9_]*) branch_tag="build-$(printf '%s' "$SHA" | cut -c1-12)" ;;
-          esac
-          echo "ghcr_tags=$ghcr:$branch_tag" >> "$GITHUB_OUTPUT"
-          echo "gitea_tags=$gitea:$branch_tag" >> "$GITHUB_OUTPUT"
-        fi
-
-    # One `docker build` with every tag, so both registries get the very same image.
-    # This step and the two pushes below spell out `set -euo pipefail` instead of relying
-    # on the runner's default shell flags: without `-e` a `docker push` failing in the
-    # middle of the loop would still leave a green job (only the last command's status
-    # counts), and prod would silently stay on the old image. The empty-tags guard covers
-    # the other half of that: an empty output would otherwise build an untagged image and
-    # run a loop over nothing, both exiting 0.
-    - name: Build the Docker image
-      env:
-        GHCR_TAGS: ${{ steps.tags.outputs.ghcr_tags }}
-        GITEA_TAGS: ${{ steps.tags.outputs.gitea_tags }}
-      run: |
-        set -euo pipefail
-        [ -n "$GHCR_TAGS" ] && [ -n "$GITEA_TAGS" ] || { echo "no tags computed" >&2; exit 1; }
-        tag_args=""
-        for tag in $GHCR_TAGS $GITEA_TAGS; do tag_args="$tag_args --tag $tag"; done
-        docker build . --file Dockerfile $tag_args
-
-    # ghcr.io goes first and is blocking: production and watchtower pull from there.
-    - name: Push the images to ghcr.io
-      env:
-        TAGS: ${{ steps.tags.outputs.ghcr_tags }}
-      run: |
-        set -euo pipefail
-        [ -n "$TAGS" ] || { echo "no tags computed" >&2; exit 1; }
         for tag in $TAGS; do docker push "$tag"; done
 
-    # The Gitea leg runs last and IS blocking: by this point the ghcr.io tags — the ones
-    # production pulls — are already pushed, so a red job here is an honest signal that the
-    # secondary registry is broken rather than a silent gap. Only the login above stays
-    # non-blocking, because failing there would abort the job before the ghcr.io push.
-    - name: Push the images to the Gitea registry
+    - name: Remove the built images from the runner
+      # The runner's docker daemon is persistent, so the images built here would
+      # otherwise pile up and grow the disk forever. This step removes ONLY the
+      # tags this run created — no `docker system prune`, which would also wipe
+      # images of other repos sharing the same daemon.
+      # It does NOT reclaim everything: `docker rmi <tag>` never touches the
+      # BuildKit cache (that lives in a separate builder store and is only freed
+      # by `docker builder prune`), and `--pull` above leaves the previous base
+      # image untagged as a dangling image whenever upstream updates it.
+      # Both need a separate periodic cleanup on the runner host.
+      # `always()` so the cleanup runs even when the push above fails.
+      if: always()
       env:
-        TAGS: ${{ steps.tags.outputs.gitea_tags }}
+        # Same reasoning as in the build step: pass the tags through the
+        # environment, and leave `$TAGS` unquoted so it word-splits into items.
+        TAGS: ${{ steps.tags.outputs.tags }}
       run: |
-        set -euo pipefail
-        [ -n "$TAGS" ] || { echo "no tags computed" >&2; exit 1; }
-        for tag in $TAGS; do docker push "$tag"; done
+        for tag in $TAGS; do docker rmi "$tag" || true; done

@@ -55,7 +55,7 @@ automatically — you never need the system Python.
 | `Dockerfile` | Slim single-stage build; no `EXPOSE`; privileges dropped by `entrypoint.sh`. |
 | `docker-compose.yml` | Deploy template — image from the container registry, volume, watchtower label. |
 | `.env.example` | Full list of env vars with placeholders. Copy to `.env`. |
-| `.gitea/workflows/` | Gitea Actions CI: `test` → `build` → push to both `ghcr.io` and `gitea.vvzvlad.xyz`. |
+| `.gitea/workflows/` | Gitea Actions CI: `image-check-publish.yml` (`test` → `build` → push to `gitea.vvzvlad.xyz`) and `tests.yml` (tests only, on PRs). |
 | `AGENTS.md` | Conventions / onboarding for agents. |
 
 ## Configuration
@@ -156,9 +156,11 @@ a database`.
 ## Start with Docker Compose
 
 Deploy the prebuilt image — do not build on prod. CI lives in Gitea Actions and publishes
-the very same image to both registries: `ghcr.io/vvzvlad/currva_converter_bot` (what
-production and watchtower pull) and `gitea.vvzvlad.xyz/projects/currva_converter_bot`. See
-`docker-compose.yml` in this repo for the full template; the short version:
+to a single registry: `gitea.vvzvlad.xyz/projects/currva_converter_bot` — that is what
+production and watchtower pull. A push to `master` publishes `:<sha>` and then `:latest`;
+any other branch publishes only a tag named after the branch, so a side branch can never
+move the tag prod deploys from. See `docker-compose.yml` in this repo for the full
+template; the short version:
 
 ```yaml
 volumes:
@@ -166,9 +168,7 @@ volumes:
 
 services:
   currva_converter_bot:
-    image: ghcr.io/vvzvlad/currva_converter_bot:latest
-    # Same image is published to the Gitea registry; switch by uncommenting:
-    # image: gitea.vvzvlad.xyz/projects/currva_converter_bot:latest
+    image: gitea.vvzvlad.xyz/projects/currva_converter_bot:latest
     container_name: currva-converter-bot
     restart: always
     volumes:
