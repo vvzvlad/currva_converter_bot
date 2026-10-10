@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     # command would silently be open to everyone.
     admin_user_id: int
 
+    # Base URL of a self-hosted Telegram Bot API server, e.g. http://10.31.41.70:8081.
+    # Unset or empty means the public api.telegram.org.
+    telegram_bot_api_server: str | None = None
+
     log_level: str = "INFO"
 
     # Development convenience: restart the process whenever a file in src/ changes.
