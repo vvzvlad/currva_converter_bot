@@ -288,6 +288,13 @@ _install_token_redaction()
 # variable already failed the process with a readable message. Never log the
 # token or the API key, not even partially.
 logger.info("Bot init")
+if settings.telegram_bot_api_server:
+    # telebot builds every request URL from this module-level template:
+    # {0} is the token, {1} the method name.
+    telebot.apihelper.API_URL = settings.telegram_bot_api_server.rstrip("/") + "/bot{0}/{1}"
+    logger.info("Bot API endpoint: local server %s", settings.telegram_bot_api_server)
+else:
+    logger.info("Bot API endpoint: api.telegram.org")
 bot = telebot.TeleBot(settings.bot_token)
 
 

@@ -67,6 +67,7 @@ All configuration comes from environment variables (or a local `.env`, see `.env
 | `BOT_TOKEN` | yes | — | Telegram bot token from @BotFather. |
 | `API_KEY` | yes | — | API key for https://api.apilayer.com/currency_data |
 | `ADMIN_USER_ID` | yes | — | Telegram user id allowed to run `/stats`. |
+| `TELEGRAM_BOT_API_SERVER` | no | — | Base URL of a self-hosted Telegram Bot API server, e.g. `http://10.31.41.70:8081`. Unset means `api.telegram.org`. |
 | `LOG_LEVEL` | no | `INFO` | `CRITICAL`/`ERROR`/`WARNING`/`INFO`/`DEBUG`, case-insensitive. `DEBUG` only affects the bot's own logging: the HTTP client loggers are clamped to `max(INFO, LOG_LEVEL)` on purpose, so `DEBUG` does not turn on request logging. The bot token is additionally masked in logging records and in uncaught tracebacks (see [Secrets in the logs](#secrets-in-the-logs)), at any `LOG_LEVEL`. |
 | `WATCH_CODE_CHANGES` | no | `false` | Development only: restart the process on any change to a file in `src/`. Accepts `true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off` (any case); empty means off. Leave it off in a container — the code never changes under a running image, and the restart uses `os.execv()`, which replaces the process immediately, so the shutdown path that closes the sqlite stores never runs. |
 | `EXCHANGE_RATES_CACHE_PATH` | no | `data/exchange_rates_cache.json` | Rates cache file. Rarely worth changing. |
