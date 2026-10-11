@@ -7,8 +7,8 @@
 stop being wired up.
 
 Everything else in this package drives _redact / the filter / the traceback writer
-directly, so gutting the body of _install_token_redaction() left the whole suite
-green while the token went to the log in production.
+directly, so without this file gutting the body of _install_token_redaction() would
+leave the whole suite green while the token goes to the log in production.
 
 Everything the function touches is process-wide, so the fixture below snapshots it,
 restores it afterwards (pytest has its own threading.excepthook and its own handlers on

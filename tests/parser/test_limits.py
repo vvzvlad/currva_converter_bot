@@ -8,7 +8,7 @@
 MAX_TEXT_LENGTH, the bound on the thousands-group repeat, the linear-time guard that
 stands in for a fixed denial of service, and the amounts the normaliser has to refuse
 rather than turn into a zero. These are the regression guards, not the feature tests —
-the comments explain what broke, and they are the reason the numbers are what they are.
+the comments explain what each one guards against, and why the numbers are what they are.
 """
 
 import logging
@@ -116,13 +116,13 @@ def test_parsing_time_scales_linearly_with_text_length(parser):
     """Regression guard for the catastrophic backtracking in the amount regex.
 
     The thousands-separator class contains a space, so on a run of digit groups
-    ("123 456 789 123 ...") the old unbounded repeat swallowed the whole tail from
-    every start position and then handed it back group by group — quadratic in the
-    length of the text, times ~170 patterns. Measured before the fix: 0.6 s at 500
-    characters, 2.5 s at 1000, 7 s at 1600, ~20-33 s at the 4096-character Telegram
-    limit. `re` does not release the GIL, so that froze the whole process — polling,
-    both telebot workers and the metrics thread — which made a single chat message a
-    remote denial of service, reachable by accident with a pasted CSV column too.
+    ("123 456 789 123 ...") an unbounded repeat swallows the whole tail from every
+    start position and then hands it back group by group — quadratic in the length
+    of the text, times ~170 patterns: 0.6 s at 500 characters, 2.5 s at 1000, 7 s at
+    1600, ~20-33 s at the 4096-character Telegram limit. `re` does not release the
+    GIL, so that freezes the whole process — polling, both telebot workers and the
+    metrics thread — which makes a single chat message a remote denial of service,
+    reachable by accident with a pasted CSV column too.
 
     The assertion is on the SHAPE of the curve, not on a wall-clock threshold: an
     absolute limit tuned on a developer machine says nothing on a loaded shared CI
@@ -164,7 +164,7 @@ def test_parsing_time_scales_linearly_with_text_length(parser):
         f"({half} chars: {short:.3f} s, {half * 2} chars: {long:.3f} s) — "
         f"linear scanning grows ~2x, quadratic ~4x")
 
-    # Kept as a second, deliberately loose backstop: the quadratic version needed
+    # Kept as a second, deliberately loose backstop: the quadratic version needs
     # 20-33 s at this length, so this only fires on a genuine regression.
     assert long < 10.0, f"parsing {half * 2} characters took {long:.2f} s"
 
@@ -190,12 +190,11 @@ def test_unparseable_amounts_are_dropped_instead_of_becoming_zero(parser):
     """An amount the normaliser cannot make sense of must disappear, quietly.
 
     "1.000,000.5" matches the amount regex, and once the thousands dots are
-    stripped "1000,0005" is left — not a number. float() raised straight out of
-    find_currencies, the handler's blanket except swallowed it, and the WHOLE
-    message was lost with it: other amounts included, and an inline query got no
-    answer at all. The neighbouring branch of the same normaliser had the mirror
-    problem — it answered 0.0, and a zero amount is what the formatter replies to
-    with an insult.
+    stripped "1000,0005" is left — not a number. Letting float() raise out of
+    find_currencies would make the handler's blanket except swallow it and lose the
+    WHOLE message: other amounts included, and an inline query would get no answer
+    at all. Answering 0.0 instead is no better — a zero amount is what the formatter
+    replies to with an insult.
     """
     # DEBUG, and nothing at INFO or above: parsing arbitrary chat text and finding
     # something unparseable is routine, not a service fault. At ERROR a single user

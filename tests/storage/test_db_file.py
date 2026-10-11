@@ -38,12 +38,12 @@ def test_an_empty_file_is_treated_as_a_fresh_database(tmp_path, closers):
 
 
 class TestFailedCommitLeavesTheConnectionUsable:
-    """Blocker: a COMMIT that raises used to leave the transaction open forever.
+    """A COMMIT that raises must not leave the transaction open forever.
 
-    On the single shared connection that poisoned every later write with
+    On the single shared connection that would poison every later write with
     "cannot start a transaction within a transaction", and
-    StatisticsManager.log_request swallows those — so the bot kept confirming
-    settings that never reached the disk until someone restarted it.
+    StatisticsManager.log_request swallows those — so the bot would keep confirming
+    settings that never reach the disk until someone restarts it.
 
     The failure is injected rather than provoked: the real triggers are a full
     disk and a lock held past busy_timeout, neither of which a unit test should

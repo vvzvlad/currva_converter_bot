@@ -35,7 +35,7 @@ CHAT_CONVERSIONS = [
 # happened to be empty only by accident.
 #
 # These are regression cases collected from production chats, obscenities included;
-# each one is a text that used to (or could) make the bot answer when it should stay
+# each one is a text that could make the bot answer when it should stay
 # silent. Do not "fix" an entry that looks wrong — the expectation IS the contract.
 TEXTS_WITH_NOTHING_TO_CONVERT = [
     "k динаров",

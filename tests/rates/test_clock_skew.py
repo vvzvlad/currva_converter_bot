@@ -41,8 +41,8 @@ class TestClockGoingBackwards:
 
     def test_a_newer_snapshot_on_disk_does_not_block_the_write(self, cache_path, make_manager):
         """The write guard orders the savers of THIS process; a file claiming to be
-        from the future used to veto every cache write for as long as the clock stayed
-        behind it, while the log cheerfully said "Successfully updated rates"."""
+        from the future must not veto every cache write for as long as the clock stays
+        behind it while the log says "Successfully updated rates"."""
         self._write_cache_from_the_future(cache_path)
 
         manager = make_manager()

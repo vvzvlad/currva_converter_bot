@@ -84,11 +84,10 @@ class Settings(BaseSettings):
     @field_validator("statistics_db_path", "user_settings_db_path")
     @classmethod
     def _reject_json_db_path(cls, value: str) -> str:
-        """Refuse the pre-migration defaults, which were *.json files.
+        """Refuse *.json paths, the defaults of the legacy JSON storage.
 
-        A deployment that pinned `STATISTICS_DB_PATH=data/statistics.json` in its
-        compose file or .env keeps working until this image is rolled out, and then
-        sqlite opens the JSON file and dies with `DatabaseError: file is not a
+        With `STATISTICS_DB_PATH=data/statistics.json` pinned in a compose file or
+        .env, sqlite would open the JSON file and die with `DatabaseError: file is not a
         database` on every start — an endless crash-loop under `restart: always`,
         with nothing in the message pointing at the variable. Raising here routes
         it through load_settings_or_exit, which names the variable instead.

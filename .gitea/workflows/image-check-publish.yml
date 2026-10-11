@@ -12,7 +12,7 @@ on:
 # No `packages: write` here: that scope is GitHub-specific and has no effect on Gitea
 # Actions — the built-in GITEA_TOKEN carries no package scope at all. Gitea 1.26 accepts
 # the key in this block but it does not make the job token usable against the registry
-# (verified on run 560: `Get "https://gitea.vvzvlad.xyz/v2/": unauthorized`). The push
+# (`Get "https://gitea.vvzvlad.xyz/v2/": unauthorized`). The push
 # below authenticates with the REGISTRY_TOKEN PAT instead.
 permissions:
   contents: read   # checkout
@@ -20,7 +20,7 @@ permissions:
 # Two pushes to the same branch in a row must not race: the runs are independent
 # and the older one may finish last, leaving its :latest on the registry — a
 # watchtower deploy would then ship the previous commit to prod.
-# The group alone already fixes that: runs are serialised, so the newest commit's
+# The group alone handles that: runs are serialised, so the newest commit's
 # :latest is written last. Cancelling is deliberately OFF — it would kill the
 # older run together with its :<sha> image, and on two quick pushes the
 # intermediate commit would never be built, leaving holes in the tag history
