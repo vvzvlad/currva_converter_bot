@@ -77,8 +77,8 @@ def test_a_temp_file_that_is_being_written_right_now_is_left_alone(tmp_path, cac
 
 def test_one_leftover_that_cannot_be_removed_does_not_stop_the_cleanup(stale, make_manager):
     """A root-owned temp file (entrypoint.sh runs as root and chowns before gosu, so
-    anything written before that stays unwritable) used to abort the whole sweep on
-    the first PermissionError, and every other megabyte stayed on the volume."""
+    anything written before that stays unwritable) must not abort the whole sweep on
+    the first PermissionError, leaving every other megabyte on the volume."""
     blocked = stale("111111")
     others = [stale("222222"), stale("333333")]
 

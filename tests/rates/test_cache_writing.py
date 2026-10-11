@@ -26,8 +26,8 @@ def test_a_successful_update_leaves_a_valid_cache_and_no_temp_file(tmp_path, cac
 
 def test_a_write_that_dies_halfway_leaves_the_previous_cache_intact(tmp_path, cache_path, make_manager):
     """The reason for the temp file plus os.replace: writing in place truncates
-    the real cache first, so a kill in the middle left a file that no longer
-    parses — and the next start had no rates at all."""
+    the real cache first, so a kill in the middle would leave a file that does not
+    parse — and the next start would have no rates at all."""
     manager = make_manager()
     before = cache_path.read_text(encoding="utf-8")
 
@@ -45,8 +45,8 @@ def test_a_write_that_dies_halfway_leaves_the_previous_cache_intact(tmp_path, ca
 
 
 def test_writing_the_cache_does_not_block_readers(make_manager):
-    """The cache write used to happen while holding the lock get_rate needs, so a
-    megabyte of json.dump stalled every message handler."""
+    """Writing the cache while holding the lock get_rate needs would let a
+    megabyte of json.dump stall every message handler."""
     manager = make_manager()
     real_dump = json.dump
     observed = {}

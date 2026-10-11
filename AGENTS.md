@@ -53,6 +53,14 @@ make test              # runs .venv/bin/pytest
 make run               # runs .venv/bin/python main.py
 ```
 
+## CI and deploy (Gitea Actions)
+- `.gitea/workflows/tests.yml` — PR gate: pytest on Python 3.11. No build, no secrets.
+- `.gitea/workflows/image-check-publish.yml` — on push to `master` (and manual runs):
+  tests, then build and push `:<sha>` and `:latest` to `gitea.vvzvlad.xyz`; other branches
+  get `:<branch>`. Production auto-deploys `:latest`, so the branch name in the workflow
+  must match the default branch (`master`).
+- `docker-compose.yml` — deploy template with placeholder values; pulls the prebuilt image.
+
 ## Conventions
 - The currency reference book is the single source of truth in `src/currencies.py`;
   the parser and the formatter take currencies only from there. Adding a currency
@@ -69,7 +77,7 @@ make run               # runs .venv/bin/python main.py
   `<BOT_TOKEN>`, `API_KEY` as `<API_KEY>` and `INFLUX_TOKEN` as `<INFLUX_TOKEN>`: a
   filter on LOGGING HANDLERS — message, args, the rendered traceback of `exc_info` and
   `stack_info` — plus `sys.excepthook` and `threading.excepthook` for uncaught exceptions
-  in the main thread and in telebot workers. That is the path that used to leak:
+  in the main thread and in telebot workers. Without it the token leaks that way:
   `requests` puts the full request URL into its exception text.
   `Logger.callHandlers` goes from the emitting logger UP to the root, so a handler on
   some other logger runs BEFORE the root handlers (`telebot` adds one to the `TeleBot`
@@ -93,3 +101,12 @@ make run               # runs .venv/bin/python main.py
 - The container runs as non-root user `app` (uid 1000) — the entrypoint starts as
   root, fixes `/app/data` ownership and drops privileges via gosu. Do not add a
   `USER` directive to the Dockerfile and do not remove the entrypoint.
+
+## Limits for agents
+- Tests: at most three times the code (`wc -l` of `tests/` against the code). Over the limit,
+  still write the test you need, and in the same change go through the old tests: drop or merge
+  duplicates and tests of implementation rather than behaviour.
+- Comments explain the code as it is and why it is built this way. History ("used to", "after
+  the review", "since the incident") goes into the commit message.
+- This file stays under ~150 lines: only what an agent would get wrong without it. No decision
+  history, incident logs or retelling of the code.

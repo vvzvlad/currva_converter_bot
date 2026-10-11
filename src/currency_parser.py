@@ -36,8 +36,8 @@ class CurrencyMatch(NamedTuple):
     """One recognised amount together with where it sits in the source text.
 
     The first three fields are, in this order, exactly the triple find_currencies()
-    has always returned, so `match[:3]` is that triple and everything built on the
-    old shape (the formatter, the rate pre-fetch, the test corpus) keeps working.
+    returns, so `match[:3]` is that triple for everything built on it (the formatter,
+    the rate pre-fetch, the test corpus).
 
     `start`/`end` are offsets into the text that was passed to
     find_currency_matches(): text[start:end] == original_text. They are what lets a
@@ -66,7 +66,7 @@ class CurrencyParser:
         #   {0,6} instead of *   The thousands-separator class contains a SPACE, so on a
         #       run of digit groups ("123 456 789 123 456 ...") an unbounded repeat eats
         #       the whole tail from every start position and then gives it back group by
-        #       group — quadratic. A 4096-character message (the Telegram limit) cost
+        #       group — quadratic. A 4096-character message (the Telegram limit) would cost
         #       ~20 s of CPU. Six groups reach 10^18, far past anything a chat message
         #       means, and make the per-position work constant.
         #   (?!\d)   A thousands group followed by another digit can never be part of a
@@ -177,7 +177,7 @@ class CurrencyParser:
             # the branches start with disjoint prefixes ("бразильск" vs "реал"), so
             # their order cannot affect matching. Including "BRL" here makes
             # _already_matched() drop the generated ISO fallback for BRL, so this
-            # pattern REPLACES it — under IGNORECASE the code now matches in any case
+            # pattern REPLACES it — under IGNORECASE the code matches in any case
             # ("brl", "Brl"), a deliberate widening of the strictly case-sensitive
             # fallback ("brl" is not an English word). "риал"/"риял" (SAR/IRR/QAR)
             # are different words and are NOT matched.
@@ -226,8 +226,8 @@ class CurrencyParser:
 
         Returns (None, currency) when the text matched a currency pattern but the
         number in it is not a number we can make sense of ("1.000,000.5"). The caller
-        drops such a match: turning it into 0.0 made the formatter answer an insult
-        (its reply to a genuine zero), and letting the ValueError escape killed the
+        drops such a match: turning it into 0.0 would make the formatter answer an insult
+        (its reply to a genuine zero), and letting the ValueError escape would kill the
         whole message — every other amount in it included.
         """
         multiplier = 1
@@ -392,8 +392,8 @@ class CurrencyParser:
         Returns list of tuples: (amount: float, currency_code: str, original_text: str)
 
         The positions are dropped here rather than never collected: callers that only
-        format the amounts (the message handler, the formatter) keep the older and
-        smaller shape, while the inline handler asks find_currency_matches() for the
+        format the amounts (the message handler, the formatter) keep the smaller
+        shape, while the inline handler asks find_currency_matches() for the
         same matches with their offsets. One search, two views of it.
         """
         return [

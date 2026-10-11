@@ -1,13 +1,8 @@
 """Durable key-value storage on top of stdlib sqlite3.
 
-Replaces pickleDB, whose `dump()` truncated the target file (`open(..., 'wt')`)
-and then serialised the whole database twice — once inline, once from a second
-thread — with no temp file, no atomic rename and no fsync. With telebot running
-handlers on a thread pool that meant two concurrent writers could interleave
-into one file and leave behind invalid JSON, losing every stored setting.
-
-sqlite gives us the three properties we actually need — atomic commits, a
-process-wide write lock and crash safety — for free, and drops a dependency.
+telebot runs handlers on a thread pool, so the store needs atomic commits, a
+process-wide write lock and crash safety; sqlite gives all three. The legacy
+pickleDB JSON files are imported once (KeyValueStore._migrate_legacy).
 """
 
 import json
@@ -86,8 +81,7 @@ class KeyValueStore:
         self._conn = sqlite3.connect(str(self._path), check_same_thread=False, isolation_level=None)
 
         # WAL: a reader never blocks the writer and a half-written transaction is
-        # rolled back on the next open instead of leaving a truncated file — the
-        # exact failure mode pickleDB had.
+        # rolled back on the next open instead of leaving a truncated file.
         # synchronous=NORMAL: in WAL mode this is crash-safe for a process kill
         # (the WAL is replayed); only a host power loss can drop the last few
         # commits. Worth it — FULL means an fsync per commit, and these are chat
@@ -130,7 +124,7 @@ class KeyValueStore:
     def _reject_non_sqlite_file(self) -> None:
         """Fail early, and readably, if the database path points at something else.
 
-        The realistic case is a deployment that still pins the pre-migration
+        The realistic case is a deployment that pins the legacy JSON
         defaults (`STATISTICS_DB_PATH=data/statistics.json`): sqlite would open the
         JSON file, raise `DatabaseError: file is not a database` on the first
         statement, and the container would crash-loop with no hint at the cause.

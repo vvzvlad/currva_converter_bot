@@ -5,11 +5,11 @@
 
 """The "Дополняй" result: the user's own text with a conversion after every amount.
 
-It used to be built with str.replace(original, conversion) once per match, which
-rewrites EVERY equal substring rather than the match it was called for. Two amounts
-of the same size therefore got two conversions each, and a shorter amount replaced
-itself inside the conversion a longer one had already inserted. The text the user
-then sent into the chat was mangled, so these tests assert on the exact string.
+Building it with str.replace(original, conversion) once per match would rewrite EVERY
+equal substring rather than the match it was called for: two amounts of the same size
+would get two conversions each, and a shorter amount would replace itself inside the
+conversion a longer one had already inserted. The user sends this text into the chat,
+so these tests assert on the exact string.
 
 Every expectation is written as a template — literal gap, conversion, literal gap —
 so the text between the matches is part of what is checked.

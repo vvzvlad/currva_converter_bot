@@ -33,10 +33,9 @@ UPDATES_INTERVAL = 12 * 60 * 60  # 12 hours
 
 # Retry schedule used INSTEAD of UPDATES_INTERVAL while updates keep failing. The
 # first retry comes a minute later (a network blip or an apilayer 5xx is normally
-# over by then) and the delay doubles up to an hour. Before this, the update thread
-# slept the full 12 hours BEFORE its first run, so a first start with an empty cache
-# and an unreachable API left the bot answering "нет доступных курсов конвертации"
-# for half a day without ever retrying. The hour cap keeps a long outage under ~24
+# over by then) and the delay doubles up to an hour. Without it, a first start with an
+# empty cache and an unreachable API would leave the bot answering "нет доступных
+# курсов конвертации" for the whole 12-hour interval. The hour cap keeps a long outage under ~24
 # extra requests a day.
 RETRY_INITIAL_INTERVAL = 60      # 1 minute
 RETRY_MAX_INTERVAL = 60 * 60     # 1 hour
@@ -150,9 +149,9 @@ class ExchangeRatesManager:
         # snapshot — but wall time cannot answer that question, because the clock can
         # step backwards (a TZ change, an NTP correction, a data volume moved between
         # hosts). It is also deliberately NOT seeded from the cache file: the guard is
-        # about two savers inside THIS process, and seeding it from disk meant that a
-        # file claiming to be from the future silently blocked every write for as long
-        # as the clock stayed behind it.
+        # about two savers inside THIS process, and seeding it from disk would let a
+        # file claiming to be from the future silently block every write for as long
+        # as the clock stays behind it.
         self._rates_revision = 0
         self._cache_written_revision = 0
         self._currencies: List[str] = []
@@ -263,8 +262,8 @@ class ExchangeRatesManager:
             self._last_update = last_update
             self._currencies = list(rates.keys())
             # _cache_written_revision is deliberately NOT touched here: it orders the
-            # writes made by THIS process, and a timestamp read from the file used to
-            # veto every one of them whenever it happened to be in the future.
+            # writes made by THIS process, and a timestamp read from the file would
+            # veto every one of them whenever it is in the future.
             logger.info(f"Loaded rates from cache, last update: {self._last_update}")
             return True
 
@@ -281,10 +280,10 @@ class ExchangeRatesManager:
 
         Two separate problems this shape solves:
           - the file is around a megabyte, and json.dump on it is slow enough that
-            doing it under self._lock stalled get_rate for every message handler;
+            doing it under self._lock would stall get_rate for every message handler;
           - open(path, 'w') truncates the real cache first, so a kill in the middle
-            left a half-written file that _load_cache then rejects — the next start
-            began with no rates and burned a paid API request.
+            would leave a half-written file that _load_cache rejects — the next start
+            would begin with no rates and burn a paid API request.
         _save_lock serialises two concurrent savers, so that the revision check, the
         write and the os.replace happen as one step and the older snapshot cannot land
         last; it is never held while rates are read, so it cannot put a handler to sleep.
@@ -366,7 +365,7 @@ class ExchangeRatesManager:
 
         Never negative. A snapshot stamped in the future (the clock stepped back, the
         timezone changed, the data volume came from another host) is reported as zero
-        age and the skew itself is logged — a negative age silently switched off the
+        age and the skew itself is logged — a negative age would silently switch off the
         staleness warning in _log_rates_age, because nothing negative can ever exceed
         STALE_RATES_MAX_AGE.
         """
@@ -455,7 +454,7 @@ class ExchangeRatesManager:
             skipped: List[str] = []
             for key, value in quotes.items():
                 currency = key[3:]  # Remove 'USD' prefix from key
-                # apilayer returns 0 for some dead currencies, and 1.0 / 0 used to
+                # apilayer returns 0 for some dead currencies, and 1.0 / 0 would
                 # raise ZeroDivisionError in the cross-rate loop below — throwing away
                 # the whole update, every healthy currency included, until the next
                 # scheduled attempt.
@@ -499,7 +498,7 @@ class ExchangeRatesManager:
             with self._lock:
                 self._rates = new_rates
                 # Assigned here, not while parsing the response: a failure halfway
-                # through used to leave the currency list describing rates we never
+                # through would leave the currency list describing rates we never
                 # actually stored.
                 self._currencies = currencies
                 self._last_update = now

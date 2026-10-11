@@ -148,7 +148,7 @@ def test_broken_legacy_statistics_json_still_starts(tmp_path, make_manager):
 def test_repaired_legacy_statistics_json_is_imported_on_the_next_start(tmp_path, make_manager):
     """The end-to-end version of the retry, through the real manager.
 
-    This is why StatisticsManager no longer seeds its counters at startup: five
+    This is why StatisticsManager does not seed its counters at startup: five
     default rows written on the first (failed) start would leave the table
     non-empty, and the retry would never happen.
     """
@@ -177,9 +177,9 @@ def test_a_fresh_statistics_store_writes_nothing_at_startup(tmp_path, make_manag
 
 
 def test_an_unreadable_timestamp_does_not_take_down_the_statistics(make_manager):
-    """One bad string in the stored blob used to raise out of get_statistics —
-    killing /stats and every iteration of the InfluxDB reporting loop with it,
-    for as long as the row stayed in the database."""
+    """One bad string in the stored blob must not raise out of get_statistics —
+    that would kill /stats and every iteration of the InfluxDB reporting loop with
+    it, for as long as the row stays in the database."""
     manager = make_manager()
     manager.log_request(StubUser(7, "testuser", "Test User"), -100, "Test chat")
 

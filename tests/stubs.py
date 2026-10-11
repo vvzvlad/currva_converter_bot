@@ -23,8 +23,7 @@
 #
 # tests/ nevertheless stays a REGULAR package, so that `from tests.stubs import ...` and
 # `from tests.logcapture import ...` resolve to this checkout rather than to some other
-# `tests` package on sys.path — see tests/__init__.py for the CI-runner failure that
-# motivated it.
+# `tests` package on sys.path — see tests/__init__.py for why.
 
 from src.currency_parser import CurrencyParser
 

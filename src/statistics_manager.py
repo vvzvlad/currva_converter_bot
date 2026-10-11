@@ -42,10 +42,10 @@ REPORTING_STOP_TIMEOUT = 2
 def _parse_timestamp(value, field: str) -> datetime:
     """Read a stored ISO timestamp, tolerating anything that is not one.
 
-    These strings come out of a JSON blob that outlives restarts and went through the
-    pickleDB import, so one truncated or hand-edited value used to raise straight out
-    of get_statistics — taking down /stats AND every iteration of the InfluxDB
-    reporting loop for as long as the bad row stayed in the database.
+    These strings come out of a JSON blob that outlives restarts and may have come
+    through the legacy JSON import. One truncated or hand-edited value must not raise
+    out of get_statistics — that would take down /stats AND every iteration of the
+    InfluxDB reporting loop for as long as the bad row stays in the database.
     """
     if value is None:
         return UNKNOWN_TIMESTAMP
@@ -61,7 +61,7 @@ def _parse_timestamp(value, field: str) -> datetime:
 
 class StatisticsManager:
     def __init__(self, db_file: str = settings.statistics_db_path):
-        # This lock is NOT redundant now that KeyValueStore has one of its own.
+        # This lock is NOT redundant with KeyValueStore's own lock.
         # The store makes each individual statement atomic; this lock makes the
         # read-modify-write sequences atomic (log_request reads 'users', mutates
         # the dict in Python and writes it back — two concurrent handlers without
@@ -385,8 +385,8 @@ class StatisticsManager:
         ERROR on every clean shutdown. Joining the thread first closes even that gap
         in the normal case.
 
-        This is the ONLY way the reporting thread is stopped. There used to be a
-        __del__ doing it as well, which is not a mechanism to rely on: it may never
+        This is the ONLY way the reporting thread is stopped. There is deliberately
+        no __del__ doing it as well, which is not a mechanism to rely on: it may never
         run (a reference cycle, or interpreter exit), and when it does run during
         shutdown the module globals it touches may already be gone. Safe to call more
         than once — the signal path calls it and main()'s finally calls it again.

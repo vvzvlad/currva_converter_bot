@@ -52,7 +52,7 @@ BOT_USER_ID = None
 # including CRITICAL), an exception in a telebot worker thread, or any third-party
 # library logging `str(exc)` / `exc_info=True`.
 #
-# Redacting the two known call sites would only close today's holes, so the secrets are
+# Redacting individual call sites would leave such paths open, so the secrets are
 # scrubbed centrally instead, at the three places where text leaves the process:
 # the logging handlers, sys.excepthook and threading.excepthook. Any new API call
 # added later is covered automatically.
@@ -109,7 +109,7 @@ def _redact(value):
     Non-strings are rendered with str() before the search instead of being passed
     through: `logger.error(exc)` and `logger.exception(exc)` put the exception OBJECT
     into record.msg, and LogRecord.getMessage() renders it with `str(self.msg) %
-    self.args` only later — so skipping non-strings here printed the full token for
+    self.args` only later — so skipping non-strings here would print the full token for
     the single most common way of logging an exception.
 
     A value whose rendering holds no secret is returned exactly as it came, type
@@ -233,7 +233,7 @@ def _redact_handlers_added_later():
             _attach_redactor(hdlr)
         except Exception:
             # This patches a stdlib method for the WHOLE process, so it must have no
-            # path on which it breaks logging setup that used to work: the handler is
+            # path on which it breaks logging setup that would otherwise work: the handler is
             # attached already, and an unredacted handler is a far smaller problem
             # than an exception escaping into a dependency's import.
             pass
@@ -331,7 +331,7 @@ def _collect_rates(found_currencies, user_currencies):
 
     The fallback is `default_currencies`, the same list format_conversion() falls back
     to when no user settings exist — using `target_currencies` (the whole reference
-    book, ~140 entries) meant fetching twenty times more pairs than the reply can show,
+    book, ~140 entries) would mean fetching twenty times more pairs than the reply can show,
     for every amount found, on every keystroke in inline mode.
 
     USD is always included: format_conversion()'s "more than a million dollars" guard
@@ -363,10 +363,10 @@ def _collect_rates(found_currencies, user_currencies):
 def _is_forwarded(message):
     """True for any forwarded message, whatever the origin.
 
-    `forward_from` alone is not enough: Bot API 7.0 replaced the flat forward_* fields
-    with a single forward_origin object, and pyTelegramBotAPI now derives the old names
-    from it — forward_from stays None for a forward from a hidden profile, a channel or
-    a group, so those slipped through the group-chat filter. forward_origin covers all
+    `forward_from` alone is not enough: since Bot API 7.0 the flat forward_* fields are
+    derived by pyTelegramBotAPI from a single forward_origin object, and forward_from
+    stays None for a forward from a hidden profile, a channel or a group, so those would
+    slip through the group-chat filter. forward_origin covers all
     four origin kinds at once; the legacy names are only consulted on an older telebot
     that has no forward_origin attribute (reading them there costs a deprecation
     warning on a modern one).
@@ -573,10 +573,10 @@ def handle_inline_query(query):
         #
         # Assembled from slices of the original text, NOT by str.replace(original, ...):
         # replace() rewrites every equal substring, while the loop walks the matches one
-        # by one, so each occurrence was converted as many times as it occurred ("дай
-        # 100$ и еще 100$" came back with both amounts carrying two conversion blocks).
+        # by one, so each occurrence would be converted as many times as it occurs ("дай
+        # 100$ и еще 100$" would come back with both amounts carrying two conversion blocks).
         # Worse, the replacement text is part of the string the next pass searches: in
-        # "взял 1100$ и 100$" the pass for "100$" fired inside the conversion already
+        # "взял 1100$ и 100$" the pass for "100$" would fire inside the conversion already
         # inserted for "1100$" and cut a foreign block into the middle of it.
         #
         # find_currency_matches() returns non-overlapping matches ordered by position, so

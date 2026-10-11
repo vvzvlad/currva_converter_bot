@@ -17,7 +17,7 @@ from src.exchange_rates_manager import (
 
 
 def test_a_failed_first_update_retries_in_minutes_not_in_twelve_hours(make_manager):
-    """The whole point of the backoff: an empty cache plus a dead API used to mean
+    """The whole point of the backoff: an empty cache plus a dead API must not mean
     half a day of "нет доступных курсов конвертации" with no second attempt."""
     manager = make_manager(failures=99)
 

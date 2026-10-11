@@ -55,7 +55,7 @@ def test_the_source_currency_is_not_converted_into_itself(bot, rates):
 
 
 def test_repeated_amounts_in_the_same_currency_are_fetched_once(bot, rates):
-    """Twelve sums in roubles used to mean 7 x 12 lookups, each taking the
+    """Twelve sums in roubles must not mean 7 x 12 lookups, each taking the
     manager's lock, all writing the same twelve keys."""
     found = [(float(index), "RUB", f"{index} рублей") for index in range(1, 13)]
     result = bot._collect_rates(found, ["EUR", "USD"])
